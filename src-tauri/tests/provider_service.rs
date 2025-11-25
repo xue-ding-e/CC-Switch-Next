@@ -512,10 +512,8 @@ fn provider_service_delete_codex_removes_provider_and_files() {
         !providers.contains_key("to-delete"),
         "provider entry should be removed"
     );
-    assert!(
-        !auth_path.exists() && !cfg_path.exists(),
-        "provider-specific files should be deleted"
-    );
+    // v3.7.0+ 不再使用供应商特定文件（如 auth-*.json, config-*.toml）
+    // 删除供应商只影响数据库记录，不清理这些旧格式文件
 }
 
 #[test]
@@ -605,13 +603,17 @@ fn provider_service_delete_current_provider_returns_error() {
         .expect_err("deleting current provider should fail");
     match err {
         AppError::Localized { zh, .. } => assert!(
-            zh.contains("不能删除当前正在使用的供应商"),
+            zh.contains("不能删除当前正在使用的供应商") || zh.contains("无法删除当前正在使用的供应商"),
             "unexpected message: {zh}"
         ),
         AppError::Config(msg) => assert!(
-            msg.contains("不能删除当前正在使用的供应商"),
+            msg.contains("不能删除当前正在使用的供应商") || msg.contains("无法删除当前正在使用的供应商"),
             "unexpected message: {msg}"
         ),
-        other => panic!("expected Config error, got {other:?}"),
+        AppError::Message(msg) => assert!(
+            msg.contains("不能删除当前正在使用的供应商") || msg.contains("无法删除当前正在使用的供应商"),
+            "unexpected message: {msg}"
+        ),
+        other => panic!("expected Config/Message error, got {other:?}"),
     }
 }

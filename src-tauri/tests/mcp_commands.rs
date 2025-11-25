@@ -53,11 +53,11 @@ fn import_default_config_claude_persists_provider() {
         "default provider should capture live settings"
     );
 
-    // 验证配置已持久化
-    let config_path = home.join(".cc-switch").join("config.json");
+    // 验证数据已持久化到数据库（v3.7.0+ 使用 SQLite 而非 config.json）
+    let db_path = home.join(".cc-switch").join("cc-switch.db");
     assert!(
-        config_path.exists(),
-        "importing default config should persist config.json"
+        db_path.exists(),
+        "importing default config should persist to cc-switch.db"
     );
 }
 
@@ -67,7 +67,7 @@ fn import_default_config_without_live_file_returns_error() {
 
     let _guard = test_mutex().lock().expect("acquire test mutex");
     reset_test_fs();
-    let home = ensure_test_home();
+    let _home = ensure_test_home();
 
     let state = create_test_state().expect("create test state");
 
@@ -85,10 +85,13 @@ fn import_default_config_without_live_file_returns_error() {
         other => panic!("unexpected error variant: {other:?}"),
     }
 
-    let config_path = home.join(".cc-switch").join("config.json");
+    // 使用数据库架构，不再检查 config.json
+    // 失败的导入不应该向数据库写入任何供应商
+    let providers = state.db.get_all_providers(AppType::Claude.as_str())
+        .expect("get all providers");
     assert!(
-        !config_path.exists(),
-        "failed import should not create config.json"
+        providers.is_empty(),
+        "failed import should not create any providers in database"
     );
 }
 
@@ -132,10 +135,11 @@ fn import_mcp_from_claude_creates_config_and_enables_servers() {
         "imported server should have Claude app enabled"
     );
 
-    let config_path = home.join(".cc-switch").join("config.json");
+    // 验证数据已持久化到数据库
+    let db_path = home.join(".cc-switch").join("cc-switch.db");
     assert!(
-        config_path.exists(),
-        "state.save should persist config.json when changes detected"
+        db_path.exists(),
+        "state.save should persist to cc-switch.db when changes detected"
     );
 }
 
@@ -145,7 +149,7 @@ fn import_mcp_from_claude_invalid_json_preserves_state() {
 
     let _guard = test_mutex().lock().expect("acquire test mutex");
     reset_test_fs();
-    let home = ensure_test_home();
+    let _home = ensure_test_home();
 
     let mcp_path = get_claude_mcp_path();
     fs::write(&mcp_path, "{\"mcpServers\":") // 不完整 JSON
@@ -163,10 +167,12 @@ fn import_mcp_from_claude_invalid_json_preserves_state() {
         other => panic!("unexpected error variant: {other:?}"),
     }
 
-    let config_path = home.join(".cc-switch").join("config.json");
+    // 使用数据库架构，检查 MCP 服务器未被写入
+    let servers = state.db.get_all_mcp_servers()
+        .expect("get all mcp servers");
     assert!(
-        !config_path.exists(),
-        "failed import should not persist config.json"
+        servers.is_empty(),
+        "failed import should not persist any MCP servers to database"
     );
 }
 
