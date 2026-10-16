@@ -1,0 +1,133 @@
+{
+  "67aa27559939a357a9df97d7e318ea04109a0b32": {
+    "stages": [
+      [
+        "d70a060190e0ba14b6c8a08290e1cbd602d26f84",
+        "1",
+        "src-tauri/tests/deeplink_import.rs"
+      ],
+      [
+        "2768f895373e3d32709d400513cc5252700d1f04",
+        "2",
+        "src-tauri/tests/deeplink_import.rs"
+      ],
+      [
+        "4171db79c3a4120b4e6d191091d1cdf3ced8cb41",
+        "3",
+        "src-tauri/tests/deeplink_import.rs"
+      ]
+    ],
+    "resolved": {
+      "src-tauri/tests/deeplink_import.rs": "2768f895373e3d32709d400513cc5252700d1f04"
+    },
+    "reason": "Preserve current tests; exact blob retained by original mainline merge 1c87c8d2."
+  },
+  "3dcbe313bed2085ab64e00f22727d69a28934274": {
+    "stages": [
+      [
+        "15e88145fb66bf27d55100a319e095cf6f301d55",
+        "1",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "0365619c069858ed628c3c385d05005aabef9a21",
+        "2",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "122e9b1bc002d205489f2963875a08eb38825de9",
+        "3",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "27110f22501c455db8d3950e6a4c9098b25da275",
+        "1",
+        "src-tauri/src/lib.rs"
+      ],
+      [
+        "1869a9b5812c2eb8d0664460e4db1f4a5958df74",
+        "2",
+        "src-tauri/src/lib.rs"
+      ],
+      [
+        "fbef7aa95955618d60afc6e0a05cd5b8f9289371",
+        "3",
+        "src-tauri/src/lib.rs"
+      ]
+    ],
+    "resolved": {
+      "src-tauri/src/commands/misc.rs": "5b1bff19af3a91ac508862fbc9a9e437c60b6b7b",
+      "src-tauri/src/lib.rs": "6fbe39463f8603011aede9c52bd24ba06e2f3e19"
+    },
+    "reason": "Keep both new import groups and both command registration groups. Only conflict hunks edited; order and union match original mainline integration c56523c9."
+  },
+  "390839a8d57143d60982c3bd55a26670dfd41388": {
+    "stages": [
+      [
+        "15e88145fb66bf27d55100a319e095cf6f301d55",
+        "1",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "5b1bff19af3a91ac508862fbc9a9e437c60b6b7b",
+        "2",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "122e9b1bc002d205489f2963875a08eb38825de9",
+        "3",
+        "src-tauri/src/commands/misc.rs"
+      ]
+    ],
+    "resolved": {
+      "src-tauri/src/commands/misc.rs": "5b1bff19af3a91ac508862fbc9a9e437c60b6b7b"
+    },
+    "reason": "Original second parent is ancestral to latest mainline. Repeated feature imports are already present along with newer mainline imports; preserving ours makes entire integration tree unchanged."
+  },
+  "a2becf0917e48b4fba387aed2cdfd2adb69adc05": {
+    "stages": [
+      [
+        "465e2819c416344c706dc629859e7548887f8284",
+        "1",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "a0dac9d284a30d910535a45b0c45611437074abf",
+        "2",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "9be6b74761ad1948e7110ffa589290d0a3a58ea1",
+        "3",
+        "src-tauri/src/commands/misc.rs"
+      ]
+    ],
+    "resolved": {
+      "src-tauri/src/commands/misc.rs": "4375921c1d95afe0822b3070ff3544b99ea52e8c"
+    },
+    "reason": "Keep both import groups at rustfmt ordering conflict. Only marker block changed; resulting whole file equals original final mainline merge c56523c9."
+  },
+  "f363bb1dd062cc496b87a609f1ebb88e1a50f8fa": {
+    "stages": [
+      [
+        "c93462797d72e8f6c43c064be36e961a064171e7",
+        "1",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "4375921c1d95afe0822b3070ff3544b99ea52e8c",
+        "2",
+        "src-tauri/src/commands/misc.rs"
+      ],
+      [
+        "5c3dcfdab3983115bc142e489b0ed0fb30462683",
+        "3",
+        "src-tauri/src/commands/misc.rs"
+      ]
+    ],
+    "resolved": {
+      "src-tauri/src/commands/misc.rs": "4375921c1d95afe0822b3070ff3544b99ea52e8c"
+    },
+    "reason": "Original second parent is ancestral to latest mainline. Keep newer mainline Lazy/Regex imports; feature is already replayed. Preserving ours makes whole integration tree unchanged and file equals original final mainline merge c56523c9."
+  }
+}

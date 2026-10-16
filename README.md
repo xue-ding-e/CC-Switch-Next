@@ -1,3 +1,11 @@
+# CC-Switch-Next
+
+Independent maintenance edition of [farion1231/cc-switch](https://github.com/farion1231/cc-switch). This repository is maintained independently and is not an official upstream release. Original authorship, licenses and third-party notices are retained.
+
+See [maintenance and history notes](MAINTENANCE.md). The upstream README follows unchanged below.
+
+---
+
 <div align="center">
 
 # CC Switch
