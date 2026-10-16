@@ -15,3 +15,9 @@
 Original workflow files are retained as documentation under `docs/upstream-workflows/` with `.txt` suffixes; GitHub does not load them as workflows. Active workflows perform structural history/JSON validation and cloud validation of the frontend and Rust backend. Cloud validation runs on `main` pushes, pull requests targeting `main`, the dedicated validation branch, and manual dispatch. It uses read-only repository permissions and does not publish releases or artifacts. Backend CI follows upstream cargo-nextest process isolation; this does not replace native desktop UI or release-channel validation.
 
 No upstream tags, releases, secrets, signing keys, R2 storage configuration or publishing credentials are copied. This repository has not published independent binaries. Product identifiers, updater endpoints and release provenance require a separate review before building or distributing independent packages. Existing upstream development and test instructions still apply.
+
+## Subsequent upstream maintenance
+
+The recorded linear baseline above remains the initialization snapshot. Later upstream fixes are applied as focused, linear cherry-picks rather than merging the original upstream graph into `main`.
+
+- Upstream `797e0276ffc20e54cbdf55e3de84505d77231c91` (`fix(proxy): preserve Claude JSON session identity (#8236)`) is imported as `452f15173` with original authorship and the `cherry-pick -x` provenance trailer. The two changed Rust files match that upstream commit exactly. Its five new regression tests are exercised explicitly before the full upstream-isolated backend suite. This fixes Claude / Claude Desktop JSON session identity handling; it does not change the earlier cache-test concurrency investigation or desktop/release acceptance gaps.

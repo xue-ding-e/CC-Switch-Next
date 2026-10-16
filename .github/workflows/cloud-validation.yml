@@ -72,6 +72,22 @@ jobs:
           cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --list | grep -Fx "$test_name: test"
           cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
         if: ${{ !cancelled() }}
+      - name: Verify Claude JSON session regressions
+        shell: bash
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > "$RUNNER_TEMP/claude-session-tests.txt"
+          tests=(
+            proxy::session::tests::test_claude_json_user_id_keeps_session_across_requests
+            proxy::session::tests::test_invalid_claude_json_user_id_falls_back_to_metadata_session
+            proxy::session::tests::test_claude_desktop_headers_precede_json_metadata
+            proxy::session::tests::test_parse_claude_json_user_id_with_whitespace
+            proxy::providers::claude::tests::test_codex_oauth_cache_key_follows_claude_json_conversation
+          )
+          for test_name in "${tests[@]}"; do
+            grep -Fx "$test_name: test" "$RUNNER_TEMP/claude-session-tests.txt"
+            cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
+          done
+        if: ${{ !cancelled() }}
       - name: Run upstream-isolated backend test suite
         working-directory: src-tauri
         run: cargo nextest run --locked --profile ci
