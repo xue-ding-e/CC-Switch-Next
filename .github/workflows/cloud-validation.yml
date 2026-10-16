@@ -1,0 +1,78 @@
+name: Cloud validation
+on:
+  push:
+    branches: [main, validation/cloud-checks]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloud-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Install pinned pnpm and dependencies
+        run: |
+          npm install --global corepack@0.31.0
+          corepack enable
+          corepack install
+          pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm format:check
+        if: ${{ !cancelled() }}
+      - run: pnpm test:unit --maxWorkers=2 --minWorkers=1
+        if: ${{ !cancelled() }}
+      - run: pnpm build:renderer
+        if: ${{ !cancelled() }}
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CC_SWITCH_TEST_HOME: /tmp/cc-switch-test-home
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+      - name: Install repository-pinned Rust toolchain
+        run: |
+          channel=$(sed -nE 's/^channel *= *"([^"]+)".*/\1/p' rust-toolchain.toml)
+          test -n "$channel"
+          rustup toolchain install "$channel" --profile minimal --component rustfmt --component clippy
+          mkdir -p dist "$CC_SWITCH_TEST_HOME"
+          rustc --version
+          cargo --version
+      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+        if: ${{ !cancelled() }}
+      - name: Install upstream-pinned cargo-nextest
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0
+        with:
+          tool: cargo-nextest
+      - name: Recheck cache test in isolation
+        shell: bash
+        run: |
+          test_name=services::session_usage_codex::tests::test_parent_rollout_is_cached_once_across_fork_cutoffs
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --list | grep -Fx "$test_name: test"
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
+        if: ${{ !cancelled() }}
+      - name: Run upstream-isolated backend test suite
+        working-directory: src-tauri
+        run: cargo nextest run --locked --profile ci
+        if: ${{ !cancelled() }}

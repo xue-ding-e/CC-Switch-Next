@@ -12,6 +12,6 @@
 
 ## Automation and releases
 
-Original workflow files are retained as documentation under `docs/upstream-workflows/` with `.txt` suffixes; GitHub does not load them as workflows. The only active workflow definition performs structural history and JSON validation on `main` changes. Repository Actions remain disabled until separately enabled after review.
+Original workflow files are retained as documentation under `docs/upstream-workflows/` with `.txt` suffixes; GitHub does not load them as workflows. Active workflows perform structural history/JSON validation and cloud validation of the frontend and Rust backend. Cloud validation runs on `main` pushes, pull requests targeting `main`, the dedicated validation branch, and manual dispatch. It uses read-only repository permissions and does not publish releases or artifacts. Backend CI follows upstream cargo-nextest process isolation; this does not replace native desktop UI or release-channel validation.
 
 No upstream tags, releases, secrets, signing keys, R2 storage configuration or publishing credentials are copied. This repository has not published independent binaries. Product identifiers, updater endpoints and release provenance require a separate review before building or distributing independent packages. Existing upstream development and test instructions still apply.
