@@ -2744,6 +2744,53 @@ mod tests {
         Ok(())
     }
 
+    // BEGIN ISOLATED SERIALIZATION PROBE
+    #[serial_test::serial]
+    fn hold_replay_test_serial_lock(
+        ready: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    ) -> usize {
+        clear_codex_replay_caches();
+        ready.send(()).unwrap();
+        release.recv_timeout(std::time::Duration::from_secs(20)).unwrap();
+        replay_caches().lock().unwrap().parent_timelines.len()
+    }
+
+    #[test]
+    fn test_continuation_parser_respects_replay_test_serial_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let (held_tx, held_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            hold_replay_test_serial_lock(held_tx, release_rx)
+        });
+        held_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let contender = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let result = test_parse_codex_file_recognizes_branch_thread_paginated_continuation();
+            done_tx.send(result.map_err(|error| error.to_string())).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let while_held = done_rx.recv_timeout(Duration::from_secs(2));
+        release_tx.send(()).unwrap();
+        let entries_while_held = holder.join().unwrap();
+        contender.join().unwrap();
+        let finished = match &while_held {
+            Ok(result) => result.clone(),
+            Err(mpsc::RecvTimeoutError::Timeout) => done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            Err(error) => panic!("contender disconnected: {error}"),
+        };
+        assert!(finished.is_ok(), "real continuation fixture failed: {finished:?}");
+        assert_eq!(entries_while_held, 0, "unserialized continuation test polluted held replay cache");
+        assert_eq!(replay_caches().lock().unwrap().parent_timelines.len(), 1);
+        assert!(matches!(while_held, Err(mpsc::RecvTimeoutError::Timeout)),
+            "continuation test bypassed the held replay-test serial lock");
+    }
+
+    // END ISOLATED SERIALIZATION PROBE
     /// 分支线程翻页产生的双段文件名带有残留的 forked_from_id，
     /// 解析时应被识别为本线程延续（Continuation），并恢复上一页基线计算增量。
     #[test]

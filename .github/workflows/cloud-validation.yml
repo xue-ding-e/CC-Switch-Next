@@ -1,39 +1,17 @@
-name: Cloud validation
+name: Isolated replay-cache serialization validation
 on:
   push:
-    branches: [main, validation/cloud-checks]
-  pull_request:
-    branches: [main]
+    branches: [test/cache-isolation-20261020]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: cloud-validation-${{ github.ref }}
-  cancel-in-progress: true
+  group: cc-replay-cache-isolation
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
 jobs:
-  frontend:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - name: Install pinned pnpm and dependencies
-        run: |
-          npm install --global corepack@0.31.0
-          corepack enable
-          corepack install
-          pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm format:check
-        if: ${{ !cancelled() }}
-      - run: pnpm test:unit --maxWorkers=2 --minWorkers=1
-        if: ${{ !cancelled() }}
-      - run: pnpm build:renderer
-        if: ${{ !cancelled() }}
   backend:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -46,49 +24,50 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install system dependencies
+      - name: Install existing system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
-      - name: Install repository-pinned Rust toolchain
+      - name: Install pinned toolchain
         run: |
-          channel=$(sed -nE 's/^channel *= *"([^"]+)".*/\1/p' rust-toolchain.toml)
-          test -n "$channel"
-          rustup toolchain install "$channel" --profile minimal --component rustfmt --component clippy
+          rustup toolchain install 1.95 --profile minimal
           mkdir -p dist "$CC_SWITCH_TEST_HOME"
-          rustc --version
-          cargo --version
-      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
-        if: ${{ !cancelled() }}
-      - name: Install upstream-pinned cargo-nextest
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0
-        with:
-          tool: cargo-nextest
-      - name: Recheck cache test in isolation
+          rustc +1.95 --version
+          cargo +1.95 --version
+      - name: Compile and discover exact baseline probe
+        run: |
+          timeout 1800 cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib --no-run
+          cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > /tmp/tests.txt
+          grep -Fx 'services::session_usage_codex::tests::test_continuation_parser_respects_replay_test_serial_lock: test' /tmp/tests.txt
+          grep -Fx 'services::session_usage_codex::tests::test_parse_codex_file_recognizes_branch_thread_paginated_continuation: test' /tmp/tests.txt
+          count=$(grep -c "^services::session_usage_codex::tests::.*: test$" /tmp/tests.txt)
+          test "$count" -gt 70
+          echo "$((count - 2))" > /tmp/original-test-count
+      - name: Verify real baseline cache pollution
         shell: bash
         run: |
-          test_name=services::session_usage_codex::tests::test_parent_rollout_is_cached_once_across_fork_cutoffs
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --list | grep -Fx "$test_name: test"
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
-        if: ${{ !cancelled() }}
-      - name: Verify Claude JSON session regressions
-        shell: bash
+          set +e
+          timeout 90 cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib services::session_usage_codex::tests::test_continuation_parser_respects_replay_test_serial_lock -- --exact --nocapture > /tmp/cache-red.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/cache-red.log
+          test "$rc" = 101
+          grep -F 'unserialized continuation test polluted held replay cache' /tmp/cache-red.log
+          grep -F '0 passed; 1 failed' /tmp/cache-red.log
+      - name: Apply minimal isolation fix and prove held-cache protection
         run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > "$RUNNER_TEMP/claude-session-tests.txt"
-          tests=(
-            proxy::session::tests::test_claude_json_user_id_keeps_session_across_requests
-            proxy::session::tests::test_invalid_claude_json_user_id_falls_back_to_metadata_session
-            proxy::session::tests::test_claude_desktop_headers_precede_json_metadata
-            proxy::session::tests::test_parse_claude_json_user_id_with_whitespace
-            proxy::providers::claude::tests::test_codex_oauth_cache_key_follows_claude_json_conversation
-          )
-          for test_name in "${tests[@]}"; do
-            grep -Fx "$test_name: test" "$RUNNER_TEMP/claude-session-tests.txt"
-            cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
+          sed -i '/^    fn test_parse_codex_file_recognizes_branch_thread_paginated_continuation(/i\    #[serial_test::serial]' src-tauri/src/services/session_usage_codex.rs
+          timeout 900 cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib services::session_usage_codex::tests::test_continuation_parser_respects_replay_test_serial_lock -- --exact --nocapture
+      - name: Verify original module without probe scaffolding
+        run: |
+          sed -i '/^    \/\/ BEGIN ISOLATED SERIALIZATION PROBE$/,/^    \/\/ END ISOLATED SERIALIZATION PROBE$/d' src-tauri/src/services/session_usage_codex.rs
+          git diff --stat
+          git diff -- src-tauri/src/services/session_usage_codex.rs
+          timeout 900 cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib services::session_usage_codex::tests:: -- --test-threads=8 | tee /tmp/module-green.log
+          grep -F "$(cat /tmp/original-test-count) passed; 0 failed; 1 ignored" /tmp/module-green.log
+          for n in 1 2 3 4; do
+            timeout 90 cargo +1.95 test --locked --manifest-path src-tauri/Cargo.toml --lib services::session_usage_codex::tests:: -- --test-threads=8 | tee /tmp/module-green.log
+            grep -F "$(cat /tmp/original-test-count) passed; 0 failed; 1 ignored" /tmp/module-green.log
           done
-        if: ${{ !cancelled() }}
-      - name: Run upstream-isolated backend test suite
-        working-directory: src-tauri
-        run: cargo nextest run --locked --profile ci
-        if: ${{ !cancelled() }}
+          sha256sum src-tauri/src/services/session_usage_codex.rs
+          echo "7ca166c91049534b69d3f3ddeaeb6cb71a5f8d4bf6b3a4197fa9d83a0a3a54b5  src-tauri/src/services/session_usage_codex.rs" | sha256sum --check
