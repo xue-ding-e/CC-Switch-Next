@@ -2747,6 +2747,7 @@ mod tests {
     /// 分支线程翻页产生的双段文件名带有残留的 forked_from_id，
     /// 解析时应被识别为本线程延续（Continuation），并恢复上一页基线计算增量。
     #[test]
+    #[serial_test::serial]
     fn test_parse_codex_file_recognizes_branch_thread_paginated_continuation(
     ) -> Result<(), AppError> {
         let dir = tempdir().unwrap();
