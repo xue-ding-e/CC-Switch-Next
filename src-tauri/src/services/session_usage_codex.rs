@@ -2745,15 +2745,21 @@ mod tests {
     }
 
     // BEGIN ISOLATED SERIALIZATION PROBE
+    type ReplayProbeChannels = (
+        std::sync::mpsc::Sender<()>,
+        std::sync::mpsc::Receiver<()>,
+        std::sync::mpsc::Sender<usize>,
+    );
+    static REPLAY_PROBE_CHANNELS: OnceLock<Mutex<Option<ReplayProbeChannels>>> = OnceLock::new();
+
     #[serial_test::serial]
-    fn hold_replay_test_serial_lock(
-        ready: std::sync::mpsc::Sender<()>,
-        release: std::sync::mpsc::Receiver<()>,
-    ) -> usize {
+    fn hold_replay_test_serial_lock() {
+        let (ready, release, entries) = REPLAY_PROBE_CHANNELS
+            .get().unwrap().lock().unwrap().take().unwrap();
         clear_codex_replay_caches();
         ready.send(()).unwrap();
         release.recv_timeout(std::time::Duration::from_secs(20)).unwrap();
-        replay_caches().lock().unwrap().parent_timelines.len()
+        entries.send(replay_caches().lock().unwrap().parent_timelines.len()).unwrap();
     }
 
     #[test]
@@ -2762,10 +2768,15 @@ mod tests {
         use std::time::Duration;
         let (held_tx, held_rx) = mpsc::channel();
         let (release_tx, release_rx) = mpsc::channel();
-        let holder = std::thread::spawn(move || {
-            hold_replay_test_serial_lock(held_tx, release_rx)
-        });
-        held_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let (entries_tx, entries_rx) = mpsc::channel();
+        *REPLAY_PROBE_CHANNELS.get_or_init(|| Mutex::new(None)).lock().unwrap() =
+            Some((held_tx, release_rx, entries_tx));
+        let holder = std::thread::spawn(hold_replay_test_serial_lock);
+        if let Err(error) = held_rx.recv_timeout(Duration::from_secs(10)) {
+            let _ = release_tx.send(());
+            let _ = holder.join();
+            panic!("serial holder did not start: {error}");
+        }
         let (started_tx, started_rx) = mpsc::channel();
         let (done_tx, done_rx) = mpsc::channel();
         let contender = std::thread::spawn(move || {
@@ -2773,11 +2784,16 @@ mod tests {
             let result = test_parse_codex_file_recognizes_branch_thread_paginated_continuation();
             done_tx.send(result.map_err(|error| error.to_string())).unwrap();
         });
-        started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let started = started_rx.recv_timeout(Duration::from_secs(10));
         let while_held = done_rx.recv_timeout(Duration::from_secs(2));
-        release_tx.send(()).unwrap();
-        let entries_while_held = holder.join().unwrap();
-        contender.join().unwrap();
+        let released = release_tx.send(());
+        let holder_joined = holder.join();
+        let contender_joined = contender.join();
+        assert!(started.is_ok(), "contender did not start");
+        assert!(released.is_ok(), "holder disconnected");
+        assert!(holder_joined.is_ok(), "holder panicked");
+        assert!(contender_joined.is_ok(), "contender panicked");
+        let entries_while_held = entries_rx.recv_timeout(Duration::from_secs(10)).unwrap();
         let finished = match &while_held {
             Ok(result) => result.clone(),
             Err(mpsc::RecvTimeoutError::Timeout) => done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
