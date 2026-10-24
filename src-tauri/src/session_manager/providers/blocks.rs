@@ -283,7 +283,9 @@ pub fn title_shell(command: &str) -> String {
 /// read：标题为路径；`detail` 为行范围 `:start-end`（offset 从 1 起算，limit 为行数）。
 pub fn title_read(path: &str, offset: Option<u64>, limit: Option<u64>) -> (String, Option<String>) {
     let detail = match (offset, limit) {
-        (Some(start), Some(limit)) if limit > 0 => Some(format!(":{start}-{}", start + limit - 1)),
+        (Some(start), Some(limit)) if limit > 0 => {
+            Some(format!(":{start}-{}", start.saturating_add(limit - 1)))
+        }
         (Some(start), None) => Some(format!(":{start}")),
         (None, Some(limit)) if limit > 0 => Some(format!(":1-{limit}")),
         _ => None,
