@@ -1,0 +1,219 @@
+--- a/src-tauri/src/session_manager/providers/agy/native.rs
++++ b/src-tauri/src/session_manager/providers/agy/native.rs
+@@ -648,6 +648,216 @@
+         };
+         assert!(resolve_content_ref(&source, &reference).is_err());
+     }
++    #[test]
++    fn empty_export_retains_native_listing_metadata_and_order() {
++        let dir = tempfile::tempdir().unwrap();
++        let root = dir.path().join("brain");
++        let conversations = dir.path().join("conversations");
++        fs::create_dir_all(&conversations).unwrap();
++        for (id, times) in [("newer", [100, 300, 200]), ("older", [150, 250, 175])] {
++            let conn = database(&conversations.join(format!("{id}.db")));
++            for (index, seconds) in times.into_iter().enumerate() {
++                insert(
++                    &conn,
++                    index as i64,
++                    if index == 0 { 14 } else { 101 },
++                    Step {
++                        user: (index == 0).then(|| User {
++                            text: format!("{id} native request"),
++                            ..Default::default()
++                        }),
++                        metadata: Some(Metadata {
++                            created: Some(Stamp { seconds, nanos: 0 }),
++                        }),
++                        ..Default::default()
++                    },
++                );
++            }
++        }
++        let before = scan_root(&root, None);
++        assert_eq!(before.len(), 2);
++        let native = before.iter().find(|s| s.session_id == "newer").unwrap();
++        assert_eq!(native.title.as_deref(), Some("newer native request"));
++        assert_eq!(native.summary.as_deref(), Some("newer native request"));
++        assert_eq!(native.created_at, Some(100_000));
++        assert_eq!(native.last_active_at, Some(300_000));
++        let logs = root.join("newer/.system_generated/logs");
++        fs::create_dir_all(&logs).unwrap();
++        let transcript = logs.join("transcript_full.jsonl");
++        for empty_export in ["", "\n \t\n", "invalid JSON\n", "null\n1\n\"scalar\"\n[]\n"] {
++            fs::write(&transcript, empty_export).unwrap();
++            let mut sessions = scan_root(&root, None);
++            assert_eq!(sessions.len(), 2);
++            let exported = sessions.iter().find(|s| s.session_id == "newer").unwrap();
++            assert_eq!(exported.provider_id, native.provider_id);
++            assert_eq!(exported.title, native.title);
++            assert_eq!(exported.summary, native.summary);
++            assert_eq!(exported.project_dir, native.project_dir);
++            assert_eq!(exported.created_at, native.created_at);
++            assert_eq!(exported.last_active_at, native.last_active_at);
++            assert_eq!(exported.resume_command, native.resume_command);
++            assert_eq!(
++                exported.source_path.as_deref(),
++                Some(transcript.to_string_lossy().as_ref())
++            );
++            // The session manager orders all providers by this activity key.
++            sessions
++                .sort_by_key(|s| std::cmp::Reverse(s.last_active_at.or(s.created_at).unwrap_or(0)));
++            assert_eq!(
++                sessions
++                    .iter()
++                    .map(|s| s.session_id.as_str())
++                    .collect::<Vec<_>>(),
++                ["newer", "older"]
++            );
++            assert_eq!(
++                super::super::load_messages(&transcript).unwrap()[0].content,
++                "newer native request"
++            );
++            assert_eq!(fs::read_to_string(&transcript).unwrap(), empty_export);
++        }
++    }
++
++    #[test]
++    fn export_and_summary_metadata_keep_precedence_over_native() {
++        let dir = tempfile::tempdir().unwrap();
++        let root = dir.path().join("brain");
++        let conversations = dir.path().join("conversations");
++        fs::create_dir_all(&conversations).unwrap();
++        let conn = database(&conversations.join("same-id.db"));
++        insert(
++            &conn,
++            0,
++            14,
++            Step {
++                user: Some(User {
++                    text: "native request".into(),
++                    ..Default::default()
++                }),
++                metadata: Some(Metadata {
++                    created: Some(Stamp {
++                        seconds: 100,
++                        nanos: 0,
++                    }),
++                }),
++                ..Default::default()
++            },
++        );
++        let logs = root.join("same-id/.system_generated/logs");
++        fs::create_dir_all(&logs).unwrap();
++        let transcript = logs.join("transcript_full.jsonl");
++        for indexed in [true, false] {
++            let mut row = json!({"type":"USER_INPUT","content":"export request",
++                "created_at":"1970-01-01T00:03:20Z"});
++            if indexed {
++                row["step_index"] = json!(0);
++            }
++            fs::write(&transcript, format!("{row}\n")).unwrap();
++            let sessions = scan_root(&root, None);
++            assert_eq!(sessions.len(), 1);
++            let exported = &sessions[0];
++            assert_eq!(exported.session_id, "same-id");
++            assert_eq!(
++                exported.source_path.as_deref(),
++                Some(transcript.to_string_lossy().as_ref())
++            );
++            // Unindexed exports retain the existing listing behavior, not native metadata.
++            assert_eq!(
++                exported.title.as_deref(),
++                indexed.then_some("export request")
++            );
++            assert_eq!(
++                exported.summary.as_deref(),
++                indexed.then_some("export request")
++            );
++            assert_eq!(exported.created_at, indexed.then_some(200_000));
++            assert_eq!(exported.last_active_at, indexed.then_some(200_000));
++            assert_eq!(
++                super::super::load_messages(&transcript).unwrap()[0].content,
++                "export request"
++            );
++        }
++        // Even an empty object is a detail-reader step and must not select native metadata.
++        fs::write(&transcript, "{}\n").unwrap();
++        let sessions = scan_root(&root, None);
++        assert_eq!(sessions.len(), 1);
++        assert_eq!(sessions[0].session_id, "same-id");
++        assert_eq!(sessions[0].title, None);
++        assert_eq!(sessions[0].summary, None);
++        assert_eq!(sessions[0].created_at, None);
++        assert_eq!(sessions[0].last_active_at, None);
++        assert_eq!(
++            sessions[0].source_path.as_deref(),
++            Some(transcript.to_string_lossy().as_ref())
++        );
++        assert_eq!(
++            super::super::load_messages(&transcript).unwrap()[0].content,
++            "{}"
++        );
++        let summaries =
++            rusqlite::Connection::open(dir.path().join("conversation_summaries.db")).unwrap();
++        summaries.execute_batch("CREATE TABLE conversation_summaries(conversation_id TEXT,title TEXT,workspace_uris TEXT,preview TEXT,last_modified_time TEXT);").unwrap();
++        summaries
++            .execute(
++                "INSERT INTO conversation_summaries VALUES (?1,?2,?3,?4,?5)",
++                rusqlite::params![
++                    "same-id",
++                    "index title",
++                    "[]",
++                    "index preview",
++                    "1970-01-01T00:06:40Z"
++                ],
++            )
++            .unwrap();
++        fs::write(&transcript, "").unwrap();
++        let sessions = scan_root(&root, None);
++        assert_eq!(sessions.len(), 1);
++        let indexed = &sessions[0];
++        assert_eq!(indexed.session_id, "same-id");
++        assert_eq!(indexed.title.as_deref(), Some("index title"));
++        assert_eq!(indexed.summary.as_deref(), Some("index preview"));
++        assert_eq!(indexed.created_at, None);
++        assert_eq!(indexed.last_active_at, Some(400_000));
++        assert_eq!(
++            indexed.source_path.as_deref(),
++            Some(transcript.to_string_lossy().as_ref())
++        );
++    }
++
++    #[test]
++    fn empty_export_without_readable_native_keeps_existing_identity() {
++        let dir = tempfile::tempdir().unwrap();
++        let root = dir.path().join("brain");
++        let logs = root.join("same-id/.system_generated/logs");
++        fs::create_dir_all(&logs).unwrap();
++        let transcript = logs.join("transcript_full.jsonl");
++        fs::write(&transcript, "").unwrap();
++        for native_data in [None, Some("not a SQLite database")] {
++            if let Some(data) = native_data {
++                let conversations = dir.path().join("conversations");
++                fs::create_dir_all(&conversations).unwrap();
++                fs::write(conversations.join("same-id.db"), data).unwrap();
++            }
++            let sessions = scan_root(&root, None);
++            assert_eq!(sessions.len(), 1);
++            let session = &sessions[0];
++            assert_eq!(session.provider_id, "agy");
++            assert_eq!(session.session_id, "same-id");
++            assert_eq!(session.title, None);
++            assert_eq!(session.summary, None);
++            assert_eq!(session.created_at, None);
++            assert_eq!(session.last_active_at, None);
++            assert_eq!(
++                session.resume_command,
++                Some(crate::agy_config::resume_command(None, "same-id"))
++            );
++            assert_eq!(
++                session.source_path.as_deref(),
++                Some(transcript.to_string_lossy().as_ref())
++            );
++        }
++    }
++
+     #[test]
+     fn malformed_and_future_formats_are_explicit_errors() {
+         assert!(decode(0, 14, 3, 1, &[]).is_err());
