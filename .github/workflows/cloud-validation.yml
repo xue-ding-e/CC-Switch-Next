@@ -1,84 +1,188 @@
 name: Cloud validation
 on:
-  push:
-    branches: [main, validation/cloud-checks]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed validation commit SHA
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: cloud-validation-${{ github.ref }}
-  cancel-in-progress: true
+  group: cloud-validation-codex-selected-provider
+  cancel-in-progress: false
 jobs:
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Verify authorized repository, branch and dispatch SHA
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          ACTUAL_REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_REPOSITORY" = xue-ding-e/CC-Switch-Next
+          test "$ACTUAL_REF" = refs/heads/validation/codex-selected-provider-20261025
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - name: Install pinned pnpm and dependencies
+      - name: Validate candidate and isolate frontend
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^)" = b5e6702a6be29f3413a689f94d718bca4df8e782
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/cloud-validation.yml
+          root="$RUNNER_TEMP/cc-routing-frontend"
+          mkdir -p "$root"/{home,config,data,cache,state,tmp,bin,npm,corepack}
+          node_bin=$(dirname "$(command -v node)")
+          env -i HOME="$root/home" XDG_CONFIG_HOME="$root/config" \
+            XDG_DATA_HOME="$root/data" XDG_CACHE_HOME="$root/cache" XDG_STATE_HOME="$root/state" \
+            TMPDIR="$root/tmp" CC_SWITCH_TEST_HOME="$root/home" \
+            PATH="$root/bin:$node_bin:/usr/bin:/bin" LANG=C.UTF-8 CI=true \
+            npm_config_prefix="$root" npm_config_cache="$root/npm" COREPACK_HOME="$root/corepack" \
+            bash --noprofile --norc -euo pipefail <<'CHECK'
           npm install --global corepack@0.31.0
-          corepack enable
+          corepack enable --install-directory "$npm_config_prefix/bin"
           corepack install
           pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm format:check
-        if: ${{ !cancelled() }}
-      - run: pnpm test:unit --maxWorkers=2 --minWorkers=1
-        if: ${{ !cancelled() }}
-      - run: pnpm build:renderer
-        if: ${{ !cancelled() }}
+          pnpm typecheck
+          pnpm format:check
+          pnpm test:unit --maxWorkers=2 --minWorkers=1
+          pnpm build:renderer
+          CHECK
   backend:
     needs: frontend
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env:
-      CARGO_BUILD_JOBS: '2'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-      CC_SWITCH_TEST_HOME: /tmp/cc-switch-test-home
     steps:
+      - name: Verify authorized repository, branch and dispatch SHA
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          ACTUAL_REF: ${{ github.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_REPOSITORY" = xue-ding-e/CC-Switch-Next
+          test "$ACTUAL_REF" = refs/heads/validation/codex-selected-provider-20261025
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
-      - name: Install repository-pinned Rust toolchain
-        run: |
-          channel=$(sed -nE 's/^channel *= *"([^"]+)".*/\1/p' rust-toolchain.toml)
-          test -n "$channel"
-          rustup toolchain install "$channel" --profile minimal --component rustfmt --component clippy
-          mkdir -p dist "$CC_SWITCH_TEST_HOME"
-          rustc --version
-          cargo --version
-      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
-        if: ${{ !cancelled() }}
-      - name: Install upstream-pinned cargo-nextest
+      - name: Install pinned nextest
         uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0
         with:
-          tool: cargo-nextest
-      - name: Recheck cache test in isolation
+          tool: cargo-nextest@0.9.149
+      - name: Verify Codex routing and existing backend regressions in isolation
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         shell: bash
         run: |
-          test_name=services::session_usage_codex::tests::test_parent_rollout_is_cached_once_across_fork_cutoffs
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --list | grep -Fx "$test_name: test"
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
-        if: ${{ !cancelled() }}
-      - name: Verify Claude JSON session regressions
-        shell: bash
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > "$RUNNER_TEMP/claude-session-tests.txt"
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD^)" = b5e6702a6be29f3413a689f94d718bca4df8e782
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/cloud-validation.yml
+          root="$RUNNER_TEMP/cc-routing-backend"
+          mkdir -p "$root"/{home,config,data,cache,state,tmp,bin,cargo,rustup,target} dist
+          rustup_bin=$(command -v rustup)
+          cp "$(command -v cargo-nextest)" "$root/bin/cargo-nextest"
+          env -i HOME="$root/home" XDG_CONFIG_HOME="$root/config" \
+            XDG_DATA_HOME="$root/data" XDG_CACHE_HOME="$root/cache" XDG_STATE_HOME="$root/state" \
+            TMPDIR="$root/tmp" CC_SWITCH_TEST_HOME="$root/home" \
+            CARGO_HOME="$root/cargo" RUSTUP_HOME="$root/rustup" CARGO_TARGET_DIR="$root/target" \
+            PATH="$root/bin:/usr/bin:/bin" LANG=C.UTF-8 CI=true \
+            CARGO_BUILD_JOBS=2 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 \
+            bash --noprofile --norc -euo pipefail -s -- "$rustup_bin" <<'CHECK'
+          channel=$(sed -nE 's/^channel *= *"([^"]+)".*/\1/p' rust-toolchain.toml)
+          test "$channel" = 1.95
+          "$1" toolchain install "$channel" --profile minimal --component rustfmt --component clippy
+          cargo_bin=$("$1" which --toolchain "$channel" cargo)
+          export PATH="$(dirname "$cargo_bin"):$PATH"
+          rustc --version
+          cargo --version
+          cargo nextest --version | grep -E '^cargo-nextest 0\.9\.149([ -]|$)'
+          sha256sum "$(command -v cargo-nextest)"
+          cargo fmt --check --manifest-path src-tauri/Cargo.toml
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > "$TMPDIR/backend-tests.list"
+          source_file="$PWD/src-tauri/src/proxy/providers/codex.rs"
+          candidate_sha=db3cd84dd1b24c34fa30ed74996be3272dbc937c2d22230b60bcf06016e06cef
+          printf '%s  %s\n' "$candidate_sha" "$source_file" | sha256sum -c -
+          cp "$source_file" "$TMPDIR/codex-candidate.rs"
+          restore_candidate() {
+            cp "$TMPDIR/codex-candidate.rs" "$source_file"
+            printf '%s  %s\n' "$candidate_sha" "$source_file" | sha256sum -c -
+          }
+          trap 'status=$?; restore_candidate || exit 1; exit "$status"' EXIT
+          python3 - <<'RED_SOURCE'
+          from pathlib import Path
+          import hashlib
+          path = Path("src-tauri/src/proxy/providers/codex.rs")
+          candidate = path.read_bytes()
+          block = b"""                // The table `model_provider` selects, read the way Codex reads it. The text
+                          // scans below remain for a top-level `openai_base_url` and for TOML that
+                          // does not parse.
+                          if let Some(url) = extract_codex_base_url_from_toml(config_str) {
+                              return Ok(url.trim_end_matches('/').to_string());
+                          }
+          """
+          def test_body(source):
+              start = source.index(b"    #[test]\n    fn test_extract_base_url_from_selected_config_provider()")
+              end = source.index(b"    #[test]", start + len(b"    #[test]"))
+              return source[start:end]
+          assert hashlib.sha256(candidate).hexdigest() == "db3cd84dd1b24c34fa30ed74996be3272dbc937c2d22230b60bcf06016e06cef"
+          assert candidate.count(block) == 1
+          baseline_with_test = candidate.replace(block, b"", 1)
+          body = test_body(candidate)
+          assert test_body(baseline_with_test) == body
+          assert hashlib.sha256(body).hexdigest() == "5ef905e80289682537836035861cb799314741f1d28fdb80fc1cc2d61adfa273"
+          assert hashlib.sha256(baseline_with_test).hexdigest() == "bef4b26227889ab5470bf4add41fdbb281bad75221af896c6ed177f727d84f1d"
+          assert hashlib.sha256(baseline_with_test.replace(body, b"", 1)).hexdigest() == "e01dab142befa4864175d4c64477b30e6b36444f367eb89f3e27d24b25547f75"
+          path.write_bytes(baseline_with_test)
+          RED_SOURCE
+          test_name=proxy::providers::codex::tests::test_extract_base_url_from_selected_config_provider
+          grep -Fx "$test_name: test" "$TMPDIR/backend-tests.list"
+          if timeout 180 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact --test-threads=1 > "$TMPDIR/codex-routing-red.log" 2>&1; then
+            red_status=0
+          else
+            red_status=$?
+          fi
+          # Preserve the complete RED output in the workflow log, including on rejection.
+          cat "$TMPDIR/codex-routing-red.log"
+          test "$red_status" -eq 101
+          grep -Fx "test $test_name ... FAILED" "$TMPDIR/codex-routing-red.log"
+          grep -F 'left: "https://azure.example.com/v1"' "$TMPDIR/codex-routing-red.log"
+          grep -F 'right: "https://relay.example.com/v1"' "$TMPDIR/codex-routing-red.log"
+          grep -F 'test result: FAILED. 0 passed; 1 failed;' "$TMPDIR/codex-routing-red.log"
+          restore_candidate
+          # GREEN uses the restored and hash-verified candidate, with the same test body.
           tests=(
+            proxy::providers::codex::tests::test_extract_base_url_from_selected_config_provider
+            proxy::providers::codex::tests::test_extract_base_url_direct
+            codex_config::tests::extract_base_url_prefers_active_provider_section
+            codex_config::tests::extract_base_url_falls_back_to_top_level_only
+            codex_config::tests::extract_base_url_ignores_non_active_provider_sections
+            services::session_usage_codex::tests::test_parent_rollout_is_cached_once_across_fork_cutoffs
             proxy::session::tests::test_claude_json_user_id_keeps_session_across_requests
             proxy::session::tests::test_invalid_claude_json_user_id_falls_back_to_metadata_session
             proxy::session::tests::test_claude_desktop_headers_precede_json_metadata
@@ -86,11 +190,11 @@ jobs:
             proxy::providers::claude::tests::test_codex_oauth_cache_key_follows_claude_json_conversation
           )
           for test_name in "${tests[@]}"; do
-            grep -Fx "$test_name: test" "$RUNNER_TEMP/claude-session-tests.txt"
-            cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
+            grep -Fx "$test_name: test" "$TMPDIR/backend-tests.list"
+            cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact --test-threads=1
           done
-        if: ${{ !cancelled() }}
-      - name: Run upstream-isolated backend test suite
-        working-directory: src-tauri
-        run: cargo nextest run --locked --profile ci
-        if: ${{ !cancelled() }}
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib proxy::providers::codex::tests:: -- --test-threads=1
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+          cd src-tauri
+          cargo nextest run --locked --profile ci --test-threads 2
+          CHECK
