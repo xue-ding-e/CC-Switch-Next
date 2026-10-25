@@ -1,0 +1,68 @@
+--- a/src-tauri/src/session_manager/providers/agy.rs
++++ b/src-tauri/src/session_manager/providers/agy.rs
+@@ -64,6 +64,17 @@
+     Ok(steps.into_values().collect())
+ }
+ 
++// The detail reader accepts any JSON object, even one without a step index.
++fn reader_has_steps(path: &Path) -> std::io::Result<bool> {
++    for line in BufReader::new(fs::File::open(path)?).lines() {
++        let line = line?;
++        if serde_json::from_str::<Value>(&line).is_ok_and(|value| value.is_object()) {
++            return Ok(true);
++        }
++    }
++    Ok(false)
++}
++
+ pub fn scan_sessions() -> Vec<SessionMeta> {
+     scan_roots(&session_sources())
+ }
+@@ -132,7 +143,7 @@
+                     .find(|v| v["type"] == "USER_INPUT")
+                     .and_then(|v| v["content"].as_str())
+                     .map(user_request);
+-                SessionMeta {
++                let mut meta = SessionMeta {
+                     provider_id: "agy".into(),
+                     session_id: id.clone(),
+                     title: first.map(|s| truncate_summary(s, 80)),
+@@ -142,7 +153,22 @@
+                     last_active_at: rows.iter().filter_map(timestamp).max(),
+                     source_path: None,
+                     resume_command: Some(crate::agy_config::resume_command(gemini_dir, &id)),
++                };
++                // Only fall back when the detail reader is empty too: it accepts unindexed rows.
++                if rows.is_empty() && reader_has_steps(&path).is_ok_and(|has_steps| !has_steps) {
++                    if let Some((text, created_at, last_active_at)) =
++                        crate::agy_conversation::for_transcript(&path)
++                            .ok()
++                            .flatten()
++                            .and_then(|db| native::preview(&db))
++                    {
++                        meta.title = (!text.is_empty()).then(|| truncate_summary(&text, 80));
++                        meta.summary = (!text.is_empty()).then(|| truncate_summary(&text, 160));
++                        meta.created_at = created_at;
++                        meta.last_active_at = last_active_at;
++                    }
+                 }
++                meta
+             };
+             meta.source_path = Some(path.to_string_lossy().into_owned());
+             sessions.push(meta);
+@@ -910,6 +936,15 @@
+     use super::*;
+ 
+     #[test]
++    fn reader_step_probe_preserves_read_errors() {
++        let dir = tempfile::tempdir().unwrap();
++        let transcript = dir.path().join("transcript_full.jsonl");
++        assert!(reader_has_steps(&transcript).is_err());
++        fs::write(&transcript, [0xff]).unwrap();
++        assert!(reader_has_steps(&transcript).is_err());
++    }
++
++    #[test]
+     fn parse_antigravity_timestamp_prefers_ts_over_created_at() {
+         let value = serde_json::json!({
+             "ts": 1771061953123i64,
