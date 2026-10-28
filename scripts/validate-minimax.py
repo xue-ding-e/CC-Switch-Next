@@ -26,6 +26,53 @@ NAMES = [
 EXPECTED = {PREFIX + n for n in NAMES}
 SUMMARY = re.compile(r'^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [0-9.]+s$')
 
+GENERATED_SCHEMAS = {
+    'src-tauri/gen/schemas/acl-manifests.json',
+    'src-tauri/gen/schemas/capabilities.json',
+    'src-tauri/gen/schemas/desktop-schema.json',
+    'src-tauri/gen/schemas/linux-schema.json',
+}
+
+
+def schema_preflight(source):
+    new_dirs = set()
+    for name in GENERATED_SCHEMAS:
+        path = source / name
+        assert path.is_relative_to(source), 'schema outside source root'
+        assert not os.path.lexists(path), 'pre-existing generated schema'
+        for directory in path.parents:
+            if not directory.is_relative_to(source):
+                break
+            assert not directory.is_symlink(), 'schema directory symlink'
+            if not directory.exists():
+                new_dirs.add(directory)
+    return sorted(new_dirs, key=lambda p: len(p.parts), reverse=True)
+
+
+def generated_schema_paths(status):
+    # Only these four observed Tauri build outputs are permitted, never arbitrary ignores.
+    lines = status.splitlines()
+    expected = {'!! ' + name for name in GENERATED_SCHEMAS}
+    assert len(lines) == len(expected) and set(lines) == expected, 'unexpected source-tree changes'
+    return sorted(GENERATED_SCHEMAS)
+
+
+def clean_generated_schemas(source, status, evidence=None):
+    records = []
+    for name in generated_schema_paths(status):
+        path = source / name
+        assert not any(p.is_symlink() for p in [path, *path.parents]), 'symlink in generated schema path'
+        assert path.is_file() and path.stat().st_size <= 10 * 1024 * 1024, 'schema size/type mismatch'
+        content = path.read_bytes()
+        json.loads(content)
+        records.append({'path': name, 'size': len(content), 'sha256': hashlib.sha256(content).hexdigest()})
+    if evidence is not None:
+        evidence.write_text(json.dumps(records, indent=2))
+    # Validate every file before removing any; source's tracked diff is checked first by caller.
+    for record in records:
+        (source / record['path']).unlink()
+    return records
+
 
 def digest(path):
     h = hashlib.sha256()
@@ -152,6 +199,7 @@ def validate():
     head = run(['git', 'rev-parse', 'HEAD'], 'head', 10).strip()
     assert head == SHA, (head, SHA)
     assert not run(['git', 'status', '--porcelain', '--untracked-files=all', '--ignored'], 'clean-before', 10).strip()
+    new_schema_dirs = schema_preflight(SOURCE)
     ENV['HOME'] = str(OUT / 'home')
     ENV['CARGO_HOME'] = str(OUT / 'cargo-home')
     ENV['CARGO_TARGET_DIR'] = str(OUT / 'target')
@@ -194,9 +242,14 @@ def validate():
     assert not any((SOURCE / 'dist').iterdir()), 'compile fixture acquired unexpected content'
     (SOURCE / 'dist').rmdir()  # Only an empty directory created by this driver is removed.
     FIXTURE_CREATED = False
+    status = run(['git', 'status', '--porcelain', '--untracked-files=all', '--ignored'], 'generated-status', 10).strip()
+    schemas = clean_generated_schemas(SOURCE, status, OUT / 'generated-schemas.json')
+    for directory in new_schema_dirs:
+        directory.rmdir()  # Only previously absent, now empty directories; never recursive.
     assert not run(['git', 'status', '--porcelain', '--untracked-files=all', '--ignored'], 'clean-after', 10).strip()
     (OUT / 'receipt.json').write_text(json.dumps({'control_sha': control_sha, 'source_sha': SHA, 'binary': str(binary),
         'binary_sha256': binary_hash, 'tests': sorted(EXPECTED), 'inventory_count': len(names),
+        'generated_schemas': schemas,
         'frontend_fixture': 'empty dist directory for Tauri compile context, removed; NO frontend build or UI validation',
         'scope': 'full-dependency Rust lib build; seven synthetic-input parser tests; not GUI/native UI/API'}, indent=2))
     print('Verified exact source and single compiled binary; 7 parser tests passed.')

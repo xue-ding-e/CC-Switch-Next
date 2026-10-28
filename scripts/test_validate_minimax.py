@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
+import os
 
 spec = importlib.util.spec_from_file_location('control', Path(__file__).with_name('validate-minimax.py'))
 control = importlib.util.module_from_spec(spec)
@@ -51,6 +53,83 @@ class Gates(unittest.TestCase):
     def test_missing_summary(self):
         with self.assertRaises(AssertionError):
             control.parse_result('\n'.join(self.good.splitlines()[:-1]), self.name)
+
+    def test_exact_generated_schema_allowlist(self):
+        status = '\n'.join('!! ' + n for n in sorted(control.GENERATED_SCHEMAS))
+        self.assertEqual(set(control.generated_schema_paths(status)), control.GENERATED_SCHEMAS)
+
+    def test_extra_ignored_is_rejected(self):
+        status = '\n'.join('!! ' + n for n in sorted(control.GENERATED_SCHEMAS))
+        with self.assertRaises(AssertionError):
+            control.generated_schema_paths(status + '\n!! unexpected.json')
+
+    def test_tracked_schema_change_is_rejected(self):
+        status = '\n'.join('!! ' + n for n in sorted(control.GENERATED_SCHEMAS))
+        with self.assertRaises(AssertionError):
+            control.generated_schema_paths(status.replace('!! ', ' M ', 1))
+
+    def test_missing_schema_is_rejected(self):
+        with self.assertRaises(AssertionError):
+            control.generated_schema_paths('')
+
+    def schema_fixture(self, source):
+        for name in control.GENERATED_SCHEMAS:
+            p = source / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text('{}')
+        return '\n'.join('!! ' + n for n in sorted(control.GENERATED_SCHEMAS))
+
+    def test_schema_cleanup_positive(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            created = control.schema_preflight(source)
+            status = self.schema_fixture(source)
+            records = control.clean_generated_schemas(source, status)
+            self.assertEqual(len(records), 4)
+            for d in created:
+                d.rmdir()
+            self.assertEqual(list(source.iterdir()), [])
+
+    def test_preexisting_schema_rejected(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            self.schema_fixture(source)
+            with self.assertRaises(AssertionError):
+                control.schema_preflight(source)
+
+    def test_dangling_schema_symlink_rejected(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            p = source / sorted(control.GENERATED_SCHEMAS)[0]
+            p.parent.mkdir(parents=True)
+            p.symlink_to('absent')
+            with self.assertRaises(AssertionError):
+                control.schema_preflight(source)
+
+    def test_schema_parent_symlink_rejected(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            (source / 'src-tauri').symlink_to('absent-dir')
+            with self.assertRaises(AssertionError):
+                control.schema_preflight(source)
+
+    def test_invalid_json_rejected_without_removal(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            status = self.schema_fixture(source)
+            (source / sorted(control.GENERATED_SCHEMAS)[-1]).write_text('{bad')
+            with self.assertRaises(ValueError):
+                control.clean_generated_schemas(source, status)
+            self.assertTrue(all((source / n).exists() for n in control.GENERATED_SCHEMAS))
+
+    def test_oversized_schema_rejected(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
+            source = Path(tmp).resolve()
+            status = self.schema_fixture(source)
+            with open(source / sorted(control.GENERATED_SCHEMAS)[0], 'wb') as f:
+                f.truncate(10 * 1024 * 1024 + 1)
+            with self.assertRaises(AssertionError):
+                control.clean_generated_schemas(source, status)
 
 
 if __name__ == '__main__':
