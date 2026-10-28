@@ -2695,6 +2695,7 @@ mod tests {
         assert_eq!(tiers[0].name, TIER_FIVE_HOUR);
         assert_eq!(tiers[0].utilization, 1.0);
         assert!(tiers[0].resets_at.is_some());
+        assert!(tiers.iter().all(|tier| tier.name != TIER_WEEKLY_LIMIT));
     }
 
     #[test]
@@ -2706,6 +2707,7 @@ mod tests {
                 "model_name": "general",
                 "current_interval_remaining_percent": 80.0,
                 "current_weekly_remaining_percent": 0.0,
+                "weekly_end_time": 1_791_881_950_066_i64,
                 "current_weekly_status": 2
             }]
         });
@@ -2715,6 +2717,10 @@ mod tests {
         assert_eq!(tiers[0].utilization, 20.0);
         assert_eq!(tiers[1].name, TIER_WEEKLY_LIMIT);
         assert_eq!(tiers[1].utilization, 100.0);
+        assert_eq!(
+            tiers[1].resets_at.as_deref(),
+            Some("2026-10-13T08:59:10.066+00:00")
+        );
     }
 
     #[test]
