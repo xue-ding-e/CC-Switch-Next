@@ -1,96 +1,79 @@
-name: Cloud validation
+name: Cloud validation (MiniMax candidate only)
 on:
-  push:
-    branches: [main, validation/cloud-checks]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed control commit SHA
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: cloud-validation-${{ github.ref }}
-  cancel-in-progress: true
+  group: cc-minimax-validation
+  cancel-in-progress: false
 jobs:
-  frontend:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - name: Install pinned pnpm and dependencies
-        run: |
-          npm install --global corepack@0.31.0
-          corepack enable
-          corepack install
-          pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm format:check
-        if: ${{ !cancelled() }}
-      - run: pnpm test:unit --maxWorkers=2 --minWorkers=1
-        if: ${{ !cancelled() }}
-      - run: pnpm build:renderer
-        if: ${{ !cancelled() }}
-  backend:
-    needs: frontend
-    if: ${{ always() && !cancelled() }}
+  parser:
+    if: github.repository == 'xue-ding-e/CC-Switch-Next' && github.ref == 'refs/heads/validation/minimax-8124-20261028' && github.event_name == 'workflow_dispatch' && inputs.expected_sha == github.sha
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env:
-      CARGO_BUILD_JOBS: '2'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-      CC_SWITCH_TEST_HOME: /tmp/cc-switch-test-home
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout reviewed control
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install system dependencies
+          path: control
+          ref: ${{ github.sha }}
+      - name: Verify immutable control checkout
+        env:
+          EXPECTED_CONTROL_SHA: ${{ inputs.expected_sha }}
         run: |
+          set -euo pipefail
+          test "$EXPECTED_CONTROL_SHA" = "$GITHUB_SHA"
+          test "$(git -C control rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Checkout immutable candidate
+        uses: actions/checkout@v4
+        with:
+          repository: xue-ding-e/CC-Switch-Next
+          ref: bd416383d971e302ed059ae7ada73fd57429ab26
+          persist-credentials: false
+          path: source
+      - name: Verify synthetic control gates (not product tests)
+        timeout-minutes: 1
+        env:
+          PYTHONDONTWRITEBYTECODE: 1
+        run: timeout 10s python3 control/scripts/test_validate_minimax.py
+      - name: Install backend build dependencies only
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
-      - name: Install repository-pinned Rust toolchain
+          rustup toolchain install 1.95 --profile minimal --component rustfmt
+          test "$(git -C source rev-parse HEAD)" = bd416383d971e302ed059ae7ada73fd57429ab26
+          rustc +1.95 --version
+          df -h .
+          free -m
+      - name: Compile once and verify actual parser tests
+        timeout-minutes: 47
+        env:
+          RUSTUP_TOOLCHAIN: '1.95'
         run: |
-          channel=$(sed -nE 's/^channel *= *"([^"]+)".*/\1/p' rust-toolchain.toml)
-          test -n "$channel"
-          rustup toolchain install "$channel" --profile minimal --component rustfmt --component clippy
-          mkdir -p dist "$CC_SWITCH_TEST_HOME"
-          rustc --version
-          cargo --version
-      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
-        if: ${{ !cancelled() }}
-      - name: Install upstream-pinned cargo-nextest
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0
+          set -euo pipefail
+          ulimit -c 0
+          ulimit -n 4096
+          # RLIMIT_AS is per process, not aggregate RSS. Driver additionally samples
+          # the dedicated process group about every 0.2s and aborts above 6 GiB.
+          # Sampling is not a hard RSS limit: short-lived peaks may be missed.
+          ulimit -v 6291456
+          unset PYTHONOPTIMIZE
+          /usr/bin/time -v python3 control/scripts/validate-minimax.py "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/minimax-evidence" 2> "$RUNNER_TEMP/minimax-resources.log"
+      - name: Upload bounded verification evidence (not binaries)
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          tool: cargo-nextest
-      - name: Recheck cache test in isolation
-        shell: bash
-        run: |
-          test_name=services::session_usage_codex::tests::test_parent_rollout_is_cached_once_across_fork_cutoffs
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --list | grep -Fx "$test_name: test"
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
-        if: ${{ !cancelled() }}
-      - name: Verify Claude JSON session regressions
-        shell: bash
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- --list > "$RUNNER_TEMP/claude-session-tests.txt"
-          tests=(
-            proxy::session::tests::test_claude_json_user_id_keeps_session_across_requests
-            proxy::session::tests::test_invalid_claude_json_user_id_falls_back_to_metadata_session
-            proxy::session::tests::test_claude_desktop_headers_precede_json_metadata
-            proxy::session::tests::test_parse_claude_json_user_id_with_whitespace
-            proxy::providers::claude::tests::test_codex_oauth_cache_key_follows_claude_json_conversation
-          )
-          for test_name in "${tests[@]}"; do
-            grep -Fx "$test_name: test" "$RUNNER_TEMP/claude-session-tests.txt"
-            cargo test --locked --manifest-path src-tauri/Cargo.toml --lib "$test_name" -- --exact
-          done
-        if: ${{ !cancelled() }}
-      - name: Run upstream-isolated backend test suite
-        working-directory: src-tauri
-        run: cargo nextest run --locked --profile ci
-        if: ${{ !cancelled() }}
+          name: minimax-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/minimax-evidence/*.json
+            ${{ runner.temp }}/minimax-evidence/*.log
+            ${{ runner.temp }}/minimax-resources.log
