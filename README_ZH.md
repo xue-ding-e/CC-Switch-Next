@@ -1,3 +1,26 @@
+# CC-Switch-Next
+
+这是 [farion1231/cc-switch](https://github.com/farion1231/cc-switch) 的独立维护版本，不是上游官方发行版；保留原作者、MIT 许可证和第三方声明。
+
+<a id="next-installation"></a>
+## 安装 CC-Switch-Next
+
+`SHA12` 表示源码提交 SHA 的前 12 位。
+
+**当前待验收，尚无公开的 Next 安装包。** 候选流水线仅构建 **Windows x64 NSIS `CC-Switch-Next-<SHA12>-Windows-x64-Setup.exe`**。下文 MSI、便携 ZIP、ARM64、macOS 和 Linux 下载属于上游，不代表已有 Next 产物。请查看 [Next Releases](https://github.com/xue-ding-e/CC-Switch-Next/releases)，不要将空页面或 Actions 制品视为已验收发行版。
+
+验证通过并发布后，下载 Setup.exe 和 SHA256SUMS，用 PowerShell `Get-FileHash` 的 SHA256 结果核对后安装。安装包未签名，Windows 可能提示发布者未知；不要关闭系统安全保护。安装时可能需要下载或安装 WebView2。
+
+升级前备份配置和数据库，关闭上游 CC Switch。Next 使用独立应用标识、`cc-switch-next.exe` 和 `ccswitch-next://`，但默认仍使用 `.cc-switch` 数据目录，**不可同时运行两者访问共享数据**。自定义数据库目录设置存于应用标识对应的存储中，不会自动迁移：先记录旧路径，再到 Next 设置中重新选择。不要覆盖上游可执行文件。
+
+这套候选配置整合并验收后，main 推送将自动执行完整验证、构建与安装冒烟检查，通过后才发布绑定源码的 `next-<SHA12>` 发行版；失败保留上次公开版本。安装冒烟不等于 GUI 交互验证。已关闭应用内上游更新，请从本仓库获取 Next 更新。
+
+## 上游项目参考（不是 Next 下载）
+
+以下平台徽章、官网和安装选项属于上游 CC Switch。
+
+---
+
 <div align="center">
 
 # CC Switch
@@ -18,7 +41,7 @@
 
 [English](README.md) | 中文 | [日本語](README_JA.md) | [Deutsch](README_DE.md) | [更新日志](CHANGELOG.md)
 
-**[下载安装](#下载安装) · [快速开始](#快速开始) · [功能特性](#功能特性) · [常见问题](#常见问题) · [用户手册](docs/user-manual/zh/README.md)**
+**[Next 安装](#next-installation) · [快速开始](#快速开始) · [功能特性](#功能特性) · [常见问题](#常见问题) · [用户手册](docs/user-manual/zh/README.md)**
 
 </div>
 
@@ -256,7 +279,7 @@ Claude Code、Codex、Gemini CLI 等 AI 编程工具各有各的配置格式。�
 
 ### Windows 用户
 
-从 [Releases](../../releases) 页面下载最新版本的 `CC-Switch-v{版本号}-Windows.msi` 安装包或 `CC-Switch-v{版本号}-Windows-Portable.zip` 绿色版。ARM 版 Windows 请下载 `CC-Switch-v{版本号}-Windows-arm64.msi` 或 `CC-Switch-v{版本号}-Windows-arm64-Portable.zip`。
+从 [Releases](https://github.com/farion1231/cc-switch/releases) 页面下载最新版本的 `CC-Switch-v{版本号}-Windows.msi` 安装包或 `CC-Switch-v{版本号}-Windows-Portable.zip` 绿色版。ARM 版 Windows 请下载 `CC-Switch-v{版本号}-Windows-arm64.msi` 或 `CC-Switch-v{版本号}-Windows-arm64-Portable.zip`。
 
 ### macOS 用户
 
@@ -274,7 +297,7 @@ brew upgrade --cask cc-switch
 
 **方式二：手动下载**
 
-从 [Releases](../../releases) 页面下载 `CC-Switch-v{版本号}-macOS.dmg`（推荐）或 `.zip`。这是 Universal 通用包，Apple Silicon 和 Intel Mac 均可原生运行。
+从 [Releases](https://github.com/farion1231/cc-switch/releases) 页面下载 `CC-Switch-v{版本号}-macOS.dmg`（推荐）或 `.zip`。这是 Universal 通用包，Apple Silicon 和 Intel Mac 均可原生运行。
 
 > **注意**：CC Switch macOS 版本已通过 Apple 代码签名和公证，可直接安装打开。
 
@@ -288,7 +311,7 @@ paru -S cc-switch-bin
 
 ### Linux 用户
 
-从 [Releases](../../releases) 页面下载最新版本的 Linux 安装包：
+从 [Releases](https://github.com/farion1231/cc-switch/releases) 页面下载最新版本的 Linux 安装包：
 
 - `CC-Switch-v{版本号}-Linux-x86_64.deb` / `-Linux-arm64.deb`（Debian/Ubuntu）
 - `CC-Switch-v{版本号}-Linux-x86_64.rpm` / `-Linux-arm64.rpm`（Fedora 等提供 WebKitGTK 4.1 的 RPM 发行版）
@@ -537,7 +560,7 @@ CC Switch 不会自动识别 WSL。请在「设置 → 应用配置」里，把�
 <details>
 <summary><strong>有命令行版本或无界面版本吗？</strong></summary>
 
-CC Switch 本身只提供需要图形界面的桌面版（系统要求见[下载安装](#下载安装)）。在服务器、SSH 远程或没有桌面环境的机器上，推荐使用社区维护的 **[CC Switch CLI](https://github.com/SaladDay/cc-switch-cli)**：它提供交互式终端界面（TUI）和命令行两种用法，支持 Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、Hermes、Pi，可以通过 Homebrew（`brew install cc-switch-cli`）或安装脚本安装。
+CC Switch 本身只提供需要图形界面的桌面版（系统要求见[Next 安装](#next-installation)）。在服务器、SSH 远程或没有桌面环境的机器上，推荐使用社区维护的 **[CC Switch CLI](https://github.com/SaladDay/cc-switch-cli)**：它提供交互式终端界面（TUI）和命令行两种用法，支持 Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw、Hermes、Pi，可以通过 Homebrew（`brew install cc-switch-cli`）或安装脚本安装。
 
 CC Switch CLI 默认与桌面版共用数据目录 `~/.cc-switch`，也兼容桌面版的 WebDAV 同步。两个项目分别发版，CLI 版支持的数据库版本有时会落后于桌面版；遇到“数据库版本过新”的提示时，请升级 CLI 版，或等它跟进更新。
 

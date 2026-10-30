@@ -1,3 +1,26 @@
+# CC-Switch-Next
+
+[farion1231/cc-switch](https://github.com/farion1231/cc-switch) の独立した保守版です。上流の公式リリースではありません。原作者、MIT ライセンス、第三者の表示を保持します。
+
+<a id="next-installation"></a>
+## CC-Switch-Next のインストール
+
+`SHA12` はソースコミット SHA の先頭 12 文字です。
+
+**検証待ちです。公開済みの Next インストーラーはまだありません。** 候補のパイプラインは **Windows x64 NSIS `CC-Switch-Next-<SHA12>-Windows-x64-Setup.exe`** のみを作成します。以下の MSI、ポータブル ZIP、ARM64、macOS、Linux は上流の配布であり、Next の配布物ではありません。[Next Releases](https://github.com/xue-ding-e/CC-Switch-Next/releases) を確認してください。空のページや Actions artifact は検証済みリリースではありません。
+
+公開後は Setup.exe と SHA256SUMS を取得し、PowerShell の `Get-FileHash` で SHA256 を比較してからインストールしてください。未署名のため Windows が不明な発行元を警告する場合があります。セキュリティ保護は無効にしないでください。WebView2 のダウンロード・インストールが必要になる場合があります。
+
+更新前に設定とデータベースをバックアップし、上流アプリを終了してください。Next は別のアプリ ID、`cc-switch-next.exe`、`ccswitch-next://` を使いますが、既定の `.cc-switch` データは共有します。**同じデータに対して両方を同時に実行しないでください。** 独自のデータベースディレクトリ設定はアプリ ID ごとに保存され、自動移行しません。旧パスを記録し、Next の設定で再選択してください。上流の実行ファイルは上書きしないでください。
+
+この候補設定の統合と検証が完了した後、main への push は完全な検証、ビルド、インストールのスモークテストを順に実行し、成功した場合のみソース固定の `next-<SHA12>` リリースを公開します。失敗時は前の公開版を保持します。GUI 操作はこのスモークテストの対象外です。上流へのアプリ内更新は無効です。Next の更新はこのリポジトリから取得してください。
+
+## 上流プロジェクトの参考情報（Next のダウンロードではありません）
+
+以下のプラットフォーム表示、公式サイト、インストール方法は上流 CC Switch のものです。
+
+---
+
 <div align="center">
 
 # CC Switch
@@ -18,7 +41,7 @@
 
 [English](README.md) | [中文](README_ZH.md) | 日本語 | [Deutsch](README_DE.md) | [Changelog](CHANGELOG.md)
 
-**[ダウンロード](#ダウンロード--インストール) · [クイックスタート](#クイックスタート) · [特長](#特長) · [よくある質問](#よくある質問) · [ユーザーマニュアル](docs/user-manual/ja/README.md)**
+**[Next のインストール](#next-installation) · [クイックスタート](#クイックスタート) · [特長](#特長) · [よくある質問](#よくある質問) · [ユーザーマニュアル](docs/user-manual/ja/README.md)**
 
 </div>
 
@@ -255,7 +278,7 @@ Claude Code、Codex、Gemini CLI などの AI コーディングツールは、�
 
 ### Windows ユーザー
 
-[Releases](../../releases) ページから最新版の `CC-Switch-v{version}-Windows.msi` インストーラー、またはポータブル版 `CC-Switch-v{version}-Windows-Portable.zip` をダウンロード。ARM 版 Windows では `CC-Switch-v{version}-Windows-arm64.msi` または `CC-Switch-v{version}-Windows-arm64-Portable.zip` をダウンロードしてください。
+[Releases](https://github.com/farion1231/cc-switch/releases) ページから最新版の `CC-Switch-v{version}-Windows.msi` インストーラー、またはポータブル版 `CC-Switch-v{version}-Windows-Portable.zip` をダウンロード。ARM 版 Windows では `CC-Switch-v{version}-Windows-arm64.msi` または `CC-Switch-v{version}-Windows-arm64-Portable.zip` をダウンロードしてください。
 
 ### macOS ユーザー
 
@@ -273,7 +296,7 @@ brew upgrade --cask cc-switch
 
 **方法 2: 手動ダウンロード**
 
-[Releases](../../releases) から `CC-Switch-v{version}-macOS.dmg`（推奨）または `.zip` をダウンロード。Apple Silicon と Intel Mac の両方でネイティブに動作する Universal ビルドです。
+[Releases](https://github.com/farion1231/cc-switch/releases) から `CC-Switch-v{version}-macOS.dmg`（推奨）または `.zip` をダウンロード。Apple Silicon と Intel Mac の両方でネイティブに動作する Universal ビルドです。
 
 > **注意**: CC Switch の macOS 版は Apple によるコード署名と公証が完了しているため、そのままインストールして開けます。
 
@@ -287,7 +310,7 @@ paru -S cc-switch-bin
 
 ### Linux ユーザー
 
-[Releases](../../releases) から最新版の Linux ビルドをダウンロード：
+[Releases](https://github.com/farion1231/cc-switch/releases) から最新版の Linux ビルドをダウンロード：
 
 - `CC-Switch-v{version}-Linux-x86_64.deb` / `-Linux-arm64.deb`（Debian/Ubuntu）
 - `CC-Switch-v{version}-Linux-x86_64.rpm` / `-Linux-arm64.rpm`（WebKitGTK 4.1 を提供する Fedora などの RPM 系ディストリビューション）

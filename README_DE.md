@@ -1,3 +1,26 @@
+# CC-Switch-Next
+
+Unabhängig gepflegte Ausgabe von [farion1231/cc-switch](https://github.com/farion1231/cc-switch), keine offizielle Upstream-Veröffentlichung. Urheberschaft, MIT-Lizenz und Hinweise Dritter bleiben erhalten.
+
+<a id="next-installation"></a>
+## CC-Switch-Next installieren
+
+`SHA12` sind die ersten 12 Zeichen des Quell-Commit-SHA.
+
+**Abnahme ausstehend: Noch kein öffentlicher Next-Installer verfügbar.** Die vorbereitete Pipeline erstellt ausschließlich **Windows x64 NSIS `CC-Switch-Next-<SHA12>-Windows-x64-Setup.exe`**. Die unten genannten MSI-, portablen ZIP-, ARM64-, macOS- und Linux-Pakete gehören zu Upstream und sind keine verfügbaren Next-Pakete. Prüfen Sie [Next Releases](https://github.com/xue-ding-e/CC-Switch-Next/releases); eine leere Seite oder ein Actions-Artefakt ist keine abgenommene Veröffentlichung.
+
+Nach der Veröffentlichung Setup.exe und SHA256SUMS herunterladen, den SHA256-Wert mit PowerShell `Get-FileHash` vergleichen und erst dann installieren. Die Pakete sind nicht signiert; Windows kann vor einem unbekannten Herausgeber warnen. Deaktivieren Sie keine Sicherheitsfunktionen. WebView2 muss möglicherweise heruntergeladen oder installiert werden.
+
+Vor einem Update Konfiguration und Datenbank sichern und Upstream CC Switch beenden. Next verwendet eine eigene Anwendungskennung, `cc-switch-next.exe` und `ccswitch-next://`, behält aber standardmäßig das gemeinsame Datenverzeichnis `.cc-switch` bei. **Beide Anwendungen nicht gleichzeitig mit gemeinsamen Daten ausführen.** Benutzerdefinierte Datenbankpfade werden je Anwendungskennung gespeichert und nicht automatisch übernommen: alten Pfad notieren und in den Next-Einstellungen erneut auswählen. Die Upstream-Programmdatei nicht überschreiben.
+
+Nach Integration und Abnahme dieser Kandidatenkonfiguration startet ein Push auf main vollständige Prüfungen, Paketbau und einen Installationstest; nur bei Erfolg wird ein quellgebundenes `next-<SHA12>`-Release veröffentlicht. Bei Fehlern bleibt die letzte öffentliche Version erhalten. GUI-Interaktionen sind nicht durch den Installationstest abgedeckt. Upstream-Updates innerhalb der Anwendung sind deaktiviert; Next-Updates stammen aus diesem Repository.
+
+## Upstream-Referenz (keine Next-Downloads)
+
+Die folgenden Plattformangaben, Websites und Installationsmöglichkeiten beziehen sich auf Upstream CC Switch.
+
+---
+
 <div align="center">
 
 # CC Switch
@@ -18,7 +41,7 @@
 
 [English](README.md) | [中文](README_ZH.md) | [日本語](README_JA.md) | Deutsch | [Changelog](CHANGELOG.md)
 
-**[Download](#download--installation) · [Schnellstart](#schnellstart) · [Funktionen](#funktionen) · [FAQ](#faq) · [Benutzerhandbuch (Englisch)](docs/user-manual/en/README.md)**
+**[Next installation](#next-installation) · [Schnellstart](#schnellstart) · [Funktionen](#funktionen) · [FAQ](#faq) · [Benutzerhandbuch (Englisch)](docs/user-manual/en/README.md)**
 
 </div>
 
@@ -255,7 +278,7 @@ Claude Code, Codex, Gemini CLI und andere KI-Programmierwerkzeuge haben jeweils 
 
 ### Windows-Nutzer
 
-Laden Sie das neueste Installationsprogramm `CC-Switch-v{version}-Windows.msi` oder die portable Version `CC-Switch-v{version}-Windows-Portable.zip` von der Seite [Releases](../../releases) herunter. Unter Windows on ARM laden Sie `CC-Switch-v{version}-Windows-arm64.msi` oder `CC-Switch-v{version}-Windows-arm64-Portable.zip` herunter.
+Laden Sie das neueste Installationsprogramm `CC-Switch-v{version}-Windows.msi` oder die portable Version `CC-Switch-v{version}-Windows-Portable.zip` von der Seite [Releases](https://github.com/farion1231/cc-switch/releases) herunter. Unter Windows on ARM laden Sie `CC-Switch-v{version}-Windows-arm64.msi` oder `CC-Switch-v{version}-Windows-arm64-Portable.zip` herunter.
 
 ### macOS-Nutzer
 
@@ -273,7 +296,7 @@ brew upgrade --cask cc-switch
 
 **Methode 2: Manueller Download**
 
-Laden Sie `CC-Switch-v{version}-macOS.dmg` (empfohlen) oder `.zip` von der Seite [Releases](../../releases) herunter. Es handelt sich um einen Universal-Build, der nativ auf Apple-Silicon- und Intel-Macs läuft.
+Laden Sie `CC-Switch-v{version}-macOS.dmg` (empfohlen) oder `.zip` von der Seite [Releases](https://github.com/farion1231/cc-switch/releases) herunter. Es handelt sich um einen Universal-Build, der nativ auf Apple-Silicon- und Intel-Macs läuft.
 
 > **Hinweis**: CC Switch für macOS ist von Apple code-signiert und notarisiert. Sie können es direkt installieren und öffnen.
 
@@ -287,7 +310,7 @@ paru -S cc-switch-bin
 
 ### Linux-Nutzer
 
-Laden Sie den neuesten Linux-Build von der Seite [Releases](../../releases) herunter:
+Laden Sie den neuesten Linux-Build von der Seite [Releases](https://github.com/farion1231/cc-switch/releases) herunter:
 
 - `CC-Switch-v{version}-Linux-x86_64.deb` / `-Linux-arm64.deb` (Debian/Ubuntu)
 - `CC-Switch-v{version}-Linux-x86_64.rpm` / `-Linux-arm64.rpm` (Fedora und andere RPM-Distributionen mit WebKitGTK 4.1)
