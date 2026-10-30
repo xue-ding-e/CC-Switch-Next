@@ -3,6 +3,13 @@
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
 
+fn ensure_distribution_updates(identifier: &str) -> Result<(), String> {
+    if identifier == "io.github.xue-ding-e.cc-switch-next" {
+        return Err("CC Switch Next: download updates from https://github.com/xue-ding-e/CC-Switch-Next/releases".to_string());
+    }
+    Ok(())
+}
+
 /// 应用更新下载进度（通过 `update-download-progress` 事件发给前端）。
 #[derive(Clone, serde::Serialize)]
 struct UpdateDownloadProgress {
@@ -268,6 +275,7 @@ pub async fn restart_app(app: AppHandle) -> Result<bool, String> {
 /// 这里把退出清理、安装和重启串在同一个后端流程中，避免依赖旧前端继续执行。
 #[tauri::command]
 pub async fn install_update_and_restart(app: AppHandle) -> Result<bool, String> {
+    ensure_distribution_updates(&app.config().identifier)?;
     let updater = app
         .updater_builder()
         .build()
@@ -345,6 +353,7 @@ pub async fn install_update_and_restart(app: AppHandle) -> Result<bool, String> 
 /// 升级无法解决，而不是让其反复尝试。
 #[tauri::command]
 pub async fn check_app_update_available(app: AppHandle) -> Result<Option<String>, String> {
+    ensure_distribution_updates(&app.config().identifier)?;
     let updater = app
         .updater_builder()
         .build()
@@ -803,4 +812,15 @@ pub async fn set_log_config(
         config.level
     );
     Ok(true)
+}
+
+#[cfg(test)]
+mod next_distribution_tests {
+    #[test]
+    fn next_distribution_requires_manual_updates() {
+        let error =
+            super::ensure_distribution_updates("io.github.xue-ding-e.cc-switch-next").unwrap_err();
+        assert!(error.contains("xue-ding-e/CC-Switch-Next/releases"));
+        assert!(super::ensure_distribution_updates("com.ccswitch.desktop").is_ok());
+    }
 }

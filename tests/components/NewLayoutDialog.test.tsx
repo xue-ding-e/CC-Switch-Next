@@ -70,7 +70,7 @@ describe("NewLayoutDialog", () => {
     );
   });
 
-  it("opens this version's release notes and closes", async () => {
+  it("opens the Next release list without inventing an upstream-version tag", async () => {
     renderDialog();
     fireEvent.click(
       await screen.findByRole("button", {
@@ -79,7 +79,7 @@ describe("NewLayoutDialog", () => {
     );
     await waitFor(() =>
       expect(mocks.openExternal).toHaveBeenCalledWith(
-        "https://github.com/farion1231/cc-switch/releases/tag/v4.0.0",
+        "https://github.com/xue-ding-e/CC-Switch-Next/releases",
       ),
     );
     await waitFor(() =>

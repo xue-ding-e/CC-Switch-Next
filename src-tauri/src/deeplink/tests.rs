@@ -2024,3 +2024,15 @@ fn test_deeplink_non_plan_and_zenmux_outside_claude_stay_off() {
     let request = coding_plan_request("claude", "https://zenmux.ai/api/anthropic");
     assert!(imported_usage_script(AppType::Claude, &request).is_some());
 }
+
+#[test]
+fn test_parse_next_scheme_preserves_provider_identity() {
+    for scheme in ["ccswitch-next", "ccswitch"] {
+        let url = format!("{scheme}://v1/import?resource=provider&app=claude&name=NextFixture&endpoint=https%3A%2F%2Fexample.invalid&apiKey=synthetic");
+        let request = parse_deeplink_url(&url).expect("supported scheme");
+        assert_eq!(request.name.as_deref(), Some("NextFixture"));
+        assert_eq!(request.app.as_deref(), Some("claude"));
+        assert_eq!(request.endpoint.as_deref(), Some("https://example.invalid"));
+        assert_eq!(request.api_key.as_deref(), Some("synthetic"));
+    }
+}

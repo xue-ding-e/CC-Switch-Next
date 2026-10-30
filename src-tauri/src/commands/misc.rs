@@ -79,7 +79,7 @@ pub async fn check_for_updates(handle: AppHandle) -> Result<bool, String> {
     handle
         .opener()
         .open_url(
-            "https://github.com/farion1231/cc-switch/releases/latest",
+            "https://github.com/xue-ding-e/CC-Switch-Next/releases/latest",
             None::<String>,
         )
         .map_err(|e| format!("打开更新页面失败: {e}"))?;
@@ -111,8 +111,13 @@ pub async fn open_portable_update_download(
     handle: AppHandle,
     version: String,
 ) -> Result<bool, String> {
-    let url = portable_zip_url(&version, cfg!(target_arch = "aarch64"))
-        .unwrap_or_else(|| "https://github.com/farion1231/cc-switch/releases/latest".to_string());
+    // Next packages have their own asset names; never fabricate an upstream ZIP.
+    let url = if handle.config().identifier == "io.github.xue-ding-e.cc-switch-next" {
+        "https://github.com/xue-ding-e/CC-Switch-Next/releases".to_string()
+    } else {
+        portable_zip_url(&version, cfg!(target_arch = "aarch64"))
+            .unwrap_or_else(|| "https://github.com/xue-ding-e/CC-Switch-Next/releases".to_string())
+    };
     handle
         .opener()
         .open_url(url, None::<String>)

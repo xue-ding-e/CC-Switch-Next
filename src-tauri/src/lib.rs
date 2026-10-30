@@ -267,7 +267,7 @@ fn handle_deeplink_url(
     focus_main_window: bool,
     source: &str,
 ) -> bool {
-    if !url_str.starts_with("ccswitch://") {
+    if !url_str.starts_with("ccswitch://") && !url_str.starts_with("ccswitch-next://") {
         return false;
     }
 
