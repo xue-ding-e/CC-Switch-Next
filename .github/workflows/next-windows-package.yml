@@ -30,12 +30,18 @@ jobs:
       - name: Install locked frontend dependencies
         shell: pwsh
         run: |
-          npm install --global corepack@0.31.0
+          $tools = Join-Path $env:RUNNER_TEMP 'cc-next-corepack'
+          $shims = Join-Path $tools 'shims'
+          New-Item -ItemType Directory -Force $shims | Out-Null
+          npm install --prefix $tools --no-audit --no-fund corepack@0.31.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          corepack enable
+          $corepack = Join-Path $tools 'node_modules/corepack/dist/corepack.js'
+          node $corepack enable --install-directory $shims pnpm
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          corepack install
+          node $corepack install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PATH = "$shims;$env:PATH"
+          $shims >> $env:GITHUB_PATH
           pnpm install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check source and Next isolation
