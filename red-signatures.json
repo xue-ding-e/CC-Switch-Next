@@ -1,0 +1,47 @@
+{
+  "model_capabilities::tests::confirmed_text_only_registry_normalizes_namespaces_and_context_markers": {
+    "location": "src/model_capabilities.rs:233:",
+    "markers": [
+      "assertion failed: is_confirmed_text_only_model"
+    ]
+  },
+  "codex_config::tests::catalog_infers_image_input_independently_of_tool_profile": {
+    "location": "src/codex_config.rs:4402:",
+    "markers": [
+      "OpenRouter's dated DeepSeek Flash alias is text-only"
+    ]
+  },
+  "proxy::media_sanitizer::tests::openrouter_dated_deepseek_replaces_codex_input_image_before_send": {
+    "location": "src/proxy/media_sanitizer.rs:572:",
+    "markers": [
+      "left: 0",
+      "right: 1"
+    ]
+  },
+  "proxy::media_sanitizer::tests::detects_openrouter_no_image_endpoint_404": {
+    "location": "src/proxy/media_sanitizer.rs:1205:",
+    "markers": [
+      "assertion failed: is_unsupported_image_error(&error)"
+    ]
+  },
+  "proxy::media_sanitizer::tests::openrouter_404_requires_image_phrase_and_a_body": {
+    "location": "src/proxy/media_sanitizer.rs:1246:",
+    "markers": [
+      "assertion failed: is_unsupported_image_error(&error)"
+    ]
+  },
+  "proxy::forwarder::tests::reactive_triggers_for_openrouter_no_image_endpoint_404": {
+    "location": "src/proxy/forwarder.rs:6832:",
+    "markers": [
+      "assertion failed: fwd.media_retry_should_trigger"
+    ]
+  },
+  "proxy::forwarder::tests::bookkeeping::openrouter_404_media_retry_on_second_provider_counts_a_switch": {
+    "location": "src/proxy/forwarder.rs:8447:",
+    "markers": [
+      "CC6194_EXPECTED_RED: scripted image-input 404 after p1=1 p2=1",
+      "left: None",
+      "right: Some(\"p2\")"
+    ]
+  }
+}

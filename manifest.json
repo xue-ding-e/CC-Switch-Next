@@ -1,0 +1,10 @@
+{
+  "test_validate.py": "2e78535c1a2dfd948c6580e163e849f6873a6cb56188853416f91cbec922550e",
+  "red-signatures.json": "75bf606c29f06bc848d3a42379425c30e84c0639b0e91f241d866496adc7d147",
+  "validate.py": "9db99dad461de221fc82cf59255f6cee95d2c0fc6b7c4bce1f8aa3a941313564",
+  "plan.json": "fa695559fb32bd01df0aac00246bb508e081a5a95b1236372a4bac472d4730f4",
+  "file-hashes.json": "b635e159c833a307e0fec17f3196605017a33f3f3799006bd469d1913b897ae4",
+  "patches/green-production-only.patch": "e30a62b1d1f9108c5443b5d4d29f0f316415f7cf65e71ceb8882226e4f7c7f5a",
+  "patches/red-tests-only.patch": "6aa92dcee812dab95c5d83200e9b06ffe59ab006b6e4bbda198fc0bbdc4d7635",
+  ".github/workflows/cc-image-fallback-validation.yml": "a723c97c033302417a32fbe3cf34f8b45dcdd29cfa22879a227deaeb8465c322"
+}

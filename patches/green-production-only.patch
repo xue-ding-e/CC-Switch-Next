@@ -1,0 +1,40 @@
+--- a/src-tauri/src/model_capabilities.rs
++++ b/src-tauri/src/model_capabilities.rs
+@@ -80,6 +80,11 @@
+         // official API continues serving V4 Pro after September 14, 2026
+         // (api-docs.deepseek.com), but hosted aliases can differ. First-party
+         // presets declare text-only explicitly; unknown gateways fail open.
++        // `deepseek-v4-flash-0731` is OpenRouter's dated alias for the
++        // 2026-07-31 Flash release, still listed there as text-only; it is not
++        // one of the legacy names the official API accepts. Keep this exact: a
++        // future `-vision` / `-vl` sibling must fail open.
++        "deepseek-v4-flash-0731",
+         "glm-5.1",
+         // Exact rather than prefix matching: GLM visual models use a `v`
+         // suffix (for example glm-5.2v), which must remain image-capable.
+--- a/src-tauri/src/proxy/media_sanitizer.rs
++++ b/src-tauri/src/proxy/media_sanitizer.rs
+@@ -57,7 +57,8 @@
+         return false;
+     };
+ 
+-    if !matches!(*status, 400 | 415 | 422 | 501) {
++    let is_standard_modality_status = matches!(*status, 400 | 415 | 422 | 501);
++    if !is_standard_modality_status && *status != 404 {
+         return false;
+     }
+ 
+@@ -67,6 +68,13 @@
+ 
+     let message = extract_error_text(body);
+     let message = message.to_ascii_lowercase();
++
++    // OpenRouter reports routing failure as 404 when every endpoint for a
++    // model rejects image input. Keep this narrow: an ordinary missing route
++    // must not trigger a body-mutating retry.
++    if *status == 404 {
++        return message.contains("no endpoints found that support image input");
++    }
+ 
+     // 自证性表述：这类短语本身就断言了"仅接受文本"，属于模态拒绝，无需再要求
+     // 错误提到 image/media 等字样——火山方舟等网关的报错是

@@ -1,0 +1,265 @@
+--- a/src-tauri/src/codex_config.rs
++++ b/src-tauri/src/codex_config.rs
+@@ -4339,6 +4339,16 @@
+                 default_reasoning_level: None,
+             },
+             CodexCatalogModelSpec {
++                model: "deepseek/deepseek-v4-flash-0731".to_string(),
++                display_name: Some("DeepSeek V4 Flash 0731".to_string()),
++                context_window: Some(128_000),
++                supports_parallel_tool_calls: None,
++                input_modalities: None,
++                base_instructions: None,
++                reasoning_levels: None,
++                default_reasoning_level: None,
++            },
++            CodexCatalogModelSpec {
+                 model: "glm-5.2v".to_string(),
+                 display_name: Some("GLM 5.2V".to_string()),
+                 context_window: Some(128_000),
+@@ -4389,6 +4399,11 @@
+ 
+             assert_eq!(modalities("gpt-5.4"), json!(["text", "image"]));
+             assert_eq!(modalities("qwen/qwen3-coder-plus"), json!(["text"]));
++            assert_eq!(
++                modalities("deepseek/deepseek-v4-flash-0731"),
++                json!(["text"]),
++                "OpenRouter's dated DeepSeek Flash alias is text-only"
++            );
+             assert_eq!(modalities("glm-5.2v"), json!(["text", "image"]));
+             assert_eq!(
+                 modalities("deepseek-v4-flash"),
+--- a/src-tauri/src/model_capabilities.rs
++++ b/src-tauri/src/model_capabilities.rs
+@@ -229,6 +229,10 @@
+         // 识图的 V4.1 Flash。两者均已移出名单，必须 fail-open。
+         assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-flash"));
+         assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-pro"));
++        assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-pro-0813"));
++        assert!(is_confirmed_text_only_model(
++            "deepseek/deepseek-v4-flash-0731"
++        ));
+         assert!(is_confirmed_text_only_model("GLM-5.2[1M]"));
+         assert!(is_confirmed_text_only_model("GLM-5.3[1M]"));
+         assert!(is_confirmed_text_only_model("qwen/qwen3-coder-plus"));
+@@ -244,6 +248,10 @@
+     #[test]
+     fn unconfirmed_family_suffixes_fail_open() {
+         for model in [
++            "deepseek-v4-flash-vision",
++            "deepseek-v4-flash-0731-vision",
++            "deepseek-v4-flash-0731-vl",
++            "deepseek-v4-flash-0801",
+             "minimax-m2.7-vision",
+             "qwen3-coder-ultra",
+             "qwen3-coder-vl",
+--- a/src-tauri/src/proxy/forwarder.rs
++++ b/src-tauri/src/proxy/forwarder.rs
+@@ -6818,6 +6818,24 @@
+     }
+ 
+     #[test]
++    fn reactive_triggers_for_openrouter_no_image_endpoint_404() {
++        let fwd = forwarder_with_rectifier(RectifierConfig::default());
++        let body = body_with_codex_input_image("deepseek/deepseek-v4-flash-0731");
++        let error = ProxyError::UpstreamError {
++            status: 404,
++            body: Some(
++                r#"{"error":{"message":"No endpoints found that support image input"}}"#
++                    .to_string(),
++            ),
++        };
++
++        assert!(fwd.media_retry_should_trigger("Codex", false, &body, &error));
++        assert!(!fwd.media_retry_should_trigger("Codex", true, &body, &error));
++        let text_body = json!({"model": "deepseek/deepseek-v4-flash-0731", "input": "hello"});
++        assert!(!fwd.media_retry_should_trigger("Codex", false, &text_body, &error));
++    }
++
++    #[test]
+     fn reactive_triggers_for_structured_and_stringified_codex_tool_images() {
+         let fwd = forwarder_with_rectifier(RectifierConfig::default());
+ 
+@@ -8397,6 +8415,81 @@
+                 .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
+         }
+ 
++        #[tokio::test]
++        async fn openrouter_404_media_retry_on_second_provider_counts_a_switch() {
++            let up1 = upstream(vec![error(500, "boom")]).await;
++            let up2 = upstream(vec![
++                error(404, "No endpoints found that support image input"),
++                ok(),
++            ])
++            .await;
++            let fwd = forwarder(2, "p1");
++
++            let result = send(
++                &fwd,
++                vec![provider("p1", &up1), provider("p2", &up2)],
++                body_with_image("claude-sonnet-4-5"),
++            )
++            .await;
++
++            // A RED result must be the scripted image rejection, not a fixture/network failure.
++            if let Err(failure) = &result {
++                assert_eq!(up1.requests.lock().await.len(), 1);
++                assert_eq!(up2.requests.lock().await.len(), 1);
++                assert!(matches!(
++                    &failure.error,
++                    ProxyError::UpstreamError { status: 404, body: Some(body) }
++                        if body.contains("No endpoints found that support image input")
++                ));
++                eprintln!("CC6194_EXPECTED_RED: scripted image-input 404 after p1=1 p2=1");
++            }
++
++            assert_eq!(result.ok().map(|r| r.provider.id), Some("p2".into()));
++            assert_eq!(
++                books(&fwd).await,
++                Books {
++                    total: 1,
++                    success: 1,
++                    failed: 0,
++                    success_rate: 100.0,
++                    failover_count: 1,
++                    last_error: None,
++                    attempting: Some("p2".into()),
++                    in_use: Some("p2".into()),
++                }
++            );
++            assert_eq!(breaker(&fwd, "p1").await, Some((1, 1)));
++            assert_eq!(breaker(&fwd, "p2").await, Some((1, 0)));
++            let requests = up2.requests.lock().await;
++            assert_eq!(requests.len(), 2);
++            assert!(crate::proxy::media_sanitizer::contains_image_blocks(&requests[0]));
++            assert!(!crate::proxy::media_sanitizer::contains_image_blocks(&requests[1]));
++            assert!(requests[1]
++                .to_string()
++                .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
++        }
++
++        #[tokio::test]
++        async fn ordinary_endpoint_404_does_not_retry_or_strip_images() {
++            // A second scripted success must remain unused for an ordinary 404.
++            let up = upstream(vec![error(404, "Route not found"), ok()]).await;
++            let fwd = forwarder(1, "p1");
++            let result = send(
++                &fwd,
++                vec![provider("p1", &up)],
++                body_with_image("claude-sonnet-4-5"),
++            )
++            .await;
++
++            assert!(result.is_err());
++            let requests = up.requests.lock().await;
++            assert_eq!(requests.len(), 1);
++            assert!(crate::proxy::media_sanitizer::contains_image_blocks(&requests[0]));
++            assert!(!requests[0]
++                .to_string()
++                .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
++        }
++
+         // ---- Stack 模型：不读也不写任何路由状态 ----
+ 
+         fn untouched() -> Books {
+--- a/src-tauri/src/proxy/media_sanitizer.rs
++++ b/src-tauri/src/proxy/media_sanitizer.rs
+@@ -554,6 +554,30 @@
+     }
+ 
+     #[test]
++    fn openrouter_dated_deepseek_replaces_codex_input_image_before_send() {
++        let provider = provider(json!({}));
++        let mut body = json!({
++            "model": "deepseek/deepseek-v4-flash-0731",
++            "input": [{
++                "role": "user",
++                "content": [
++                    { "type": "input_text", "text": "look" },
++                    { "type": "input_image", "image_url": "data:image/png;base64,abc" }
++                ]
++            }]
++        });
++
++        let count = replace_images_for_text_only_model(&mut body, &provider, true);
++
++        assert_eq!(count, 1);
++        assert_eq!(body["input"][0]["content"][1]["type"], "input_text");
++        assert_eq!(
++            body["input"][0]["content"][1]["text"],
++            UNSUPPORTED_IMAGE_MARKER
++        );
++    }
++
++    #[test]
+     fn longcat_models_are_classified_text_only() {
+         // LongCat-2.0 (like the retired Flash Chat) is a text-only model; the
+         // preset ships it in mixed case, so the classifier must normalize first.
+@@ -1169,6 +1193,67 @@
+     }
+ 
+     #[test]
++    fn detects_openrouter_no_image_endpoint_404() {
++        let error = ProxyError::UpstreamError {
++            status: 404,
++            body: Some(
++                r#"{"error":{"message":"No endpoints found that support image input"}}"#
++                    .to_string(),
++            ),
++        };
++
++        assert!(is_unsupported_image_error(&error));
++    }
++
++    #[test]
++    fn ignores_unrelated_404_errors() {
++        for message in [
++            "Route not found",
++            "Invalid API key",
++            "No endpoints found",
++            "No endpoints found that support image generation",
++        ] {
++            let error = ProxyError::UpstreamError {
++                status: 404,
++                body: Some(json!({ "error": { "message": message } }).to_string()),
++            };
++
++            assert!(!is_unsupported_image_error(&error));
++        }
++    }
++
++    #[test]
++    fn openrouter_404_requires_image_phrase_and_a_body() {
++        for body in [
++            None,
++            Some(""),
++            Some("<html>404 Not Found</html>"),
++            Some("{}"),
++            Some("null"),
++        ] {
++            let error = ProxyError::UpstreamError {
++                status: 404,
++                body: body.map(str::to_string),
++            };
++            assert!(!is_unsupported_image_error(&error));
++        }
++        // Plain-text gateways use the same self-evident phrase as JSON errors.
++        let message = "No endpoints found that support image input";
++        let error = ProxyError::UpstreamError {
++            status: 404,
++            body: Some(message.to_string()),
++        };
++        assert!(is_unsupported_image_error(&error));
++        for status in [401, 403, 429, 500, 502] {
++            let error = ProxyError::UpstreamError {
++                status,
++                body: Some(message.to_string()),
++            };
++            assert!(!is_unsupported_image_error(&error));
++        }
++    }
++
++    #[test]
+     fn detects_text_only_errors_without_image_mention() {
+         // 火山方舟真实报错（issue #5025）：不含 image/media 等字样，且英文缺
+         // 三单 s——旧逻辑的 mentions_image 门与 "only supports text" 提示都拦不住。

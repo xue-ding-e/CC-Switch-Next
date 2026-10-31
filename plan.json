@@ -1,0 +1,101 @@
+{
+  "status": "LOCAL DRIVER IMPLEMENTED, HARD DISABLED, NOT RUST EXECUTED",
+  "baseline": {
+    "sha": "66c2f2351ac43e0d7bdb93f2ceafeac188e00329",
+    "tree": "815cf16c5b4b55539d82cce491d674d6d8149dd0",
+    "cargoLockSha256": "d848d2c80470b40645bc4698415525546de45a3eb83dcfa67cd9a941bea9c55e",
+    "pnpmLockSha256": "86061719ddd774ebfa50bdec570bea33b703574fcf88703ef2fa8483508124ca"
+  },
+  "candidate": {
+    "patchSha256": "e0f7b5ae71771f2484bea337ec6724714ce35c3c08f51df7e1fe59a95456a11e",
+    "source": "candidate/openrouter-image-404-20261031",
+    "hashManifest": "file-hashes.json",
+    "commitSha": "4494dd316ea31cdb3cc506ee802bb5d4377f17b4",
+    "treeSha": "0e10c744e56cb06757266ce3cf949b59e7ec5ed4",
+    "warning": "Pinned static candidate; no Rust or fmt qualification yet."
+  },
+  "priorEnvironment": {
+    "run": 41129939484,
+    "job": 124320467532,
+    "url": "https://github.com/xue-ding-e/CC-Switch-Next/actions/runs/41129939484",
+    "status": "success",
+    "runner": "ubuntu-24.04",
+    "rust": "1.95",
+    "basis": "Reuse backend system packages and pinned Rust, not unrelated frontend/full-suite/package steps. Baseline exact same sourceSHA."
+  },
+  "queue": {
+    "active": "41169754085",
+    "ahead": "Magpie fd1; Xen fbfcc",
+    "noDispatch": true
+  },
+  "patches": {
+    "red": "patches/red-tests-only.patch",
+    "green": "patches/green-production-only.patch",
+    "redSha256": "6aa92dcee812dab95c5d83200e9b06ffe59ab006b6e4bbda198fc0bbdc4d7635",
+    "greenSha256": "e30a62b1d1f9108c5443b5d4d29f0f316415f7cf65e71ceb8882226e4f7c7f5a",
+    "construction": "RED only replaces #[cfg(test)] mod tests suffixes in four files; production prefixes byte-identical baseline. GREEN changes only production prefixes in model_capabilities/media_sanitizer, same test suffixes."
+  },
+  "expectedRedFailures": [
+    "model_capabilities::tests::confirmed_text_only_registry_normalizes_namespaces_and_context_markers",
+    "codex_config::tests::catalog_infers_image_input_independently_of_tool_profile",
+    "proxy::media_sanitizer::tests::openrouter_dated_deepseek_replaces_codex_input_image_before_send",
+    "proxy::media_sanitizer::tests::detects_openrouter_no_image_endpoint_404",
+    "proxy::media_sanitizer::tests::openrouter_404_requires_image_phrase_and_a_body",
+    "proxy::forwarder::tests::reactive_triggers_for_openrouter_no_image_endpoint_404",
+    "proxy::forwarder::tests::bookkeeping::openrouter_404_media_retry_on_second_provider_counts_a_switch"
+  ],
+  "controlPassBoth": [
+    "model_capabilities::tests::unconfirmed_family_suffixes_fail_open",
+    "model_capabilities::tests::explicit_capability_overrides_the_registry",
+    "proxy::media_sanitizer::tests::ignores_unrelated_404_errors",
+    "proxy::forwarder::tests::reactive_triggers_for_codex_image_url_deserialize_errors",
+    "proxy::forwarder::tests::reactive_does_not_treat_context_limit_as_image_rejection",
+    "proxy::forwarder::tests::reactive_skipped_when_media_fallback_off",
+    "proxy::forwarder::tests::reactive_skipped_when_master_switch_off",
+    "proxy::forwarder::tests::reactive_unaffected_by_heuristic_switch",
+    "proxy::forwarder::tests::bookkeeping::media_retry_success_on_the_second_provider_counts_a_switch",
+    "proxy::forwarder::tests::bookkeeping::ordinary_endpoint_404_does_not_retry_or_strip_images"
+  ],
+  "counts": {
+    "redFailures": 7,
+    "redPass": 10,
+    "greenPass": 17
+  },
+  "stages": [
+    "Preflight exact repository/ref/controlSHA; baseSHA/tree; lock hashes; exact 4 allowed files and patch hashes; clean isolated source; reject unknown paths/symlinks. Memory >=8GiB, disk >=10GiB else environment_blocked.",
+    "Prepare native Linux dependencies from successful cloud-validation backend; Rust1.95/rustfmt; dist placeholder; isolated CC_SWITCH_TEST_HOME/XDG paths; HOME/CARGO_HOME/RUSTUP_HOME unchanged; CARGO_BUILD_JOBS=2; DEBUG=0; target outside source; no frontend dependencies, no NSIS/release.",
+    "Apply RED tests-only patch after git apply --check; validate four red file hashes and production prefixes equal base. Compile cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --no-run --message-format=json. Collect exact lib test executable from compiler-artifact with profile.test=true; require successful build and unique binary. Save binarySHA and inventory --list, require all17 named tests exactly once.",
+    "Run each binary --exact NAME --test-threads=1 sequentially. Require running1test and exact result identity. Seven RED tests must fail as assertions at their expected missing behavior, ten controls pass. Reject compile error, missing/ignored/0tests, socket bind/connect errors, panics in fixture setup, DNS/HTTP502, timeout/resource/cancellation as RED. Save raw logs/exit/duration for each. HTTP tests use existing loopback mock, no real provider credentials or network.",
+    "Apply GREEN production-only patch to same checkout; verify exact green hashes and same test suffixes. Recompile same lib target, record new binarySHA; same17 exact tests must pass1each. Never count full suite or GUI/native Windows coverage.",
+    "Real rustfmt gate on isolated full GREEN copy with pinned1.95: cargo fmt --check; retain actual stdout/stderr+exit. If formatting needed run cargo fmt only on that disposable copy, capture actual git diff as fmt-proposal.patch, mark needs_review and stop qualification; never silently alter original candidate or claim hand-format passed.",
+    "Verify lock hashes unchanged, exact allowed source diff and artifact hashes after both phases. Record Tauri generated-schema outputs separately (do not delete arbitrary files), tracked source hash manifest before/after. Upload logs/JSON/patch proposals only; no binaries/secrets.",
+    "Stop terminal success only if exact7RED+10controls+17GREEN all match plus actual fmt passes and integrity holds. Otherwise classify source_failure/environment_blocked/fixture_failure/compile_failure/budget_exceeded/needs_format_review independently; no auto-rerun."
+  ],
+  "budgets": {
+    "oneJob": true,
+    "jobMinutes": 80,
+    "preparationMinutes": 10,
+    "redCompileMinutes": 28,
+    "greenCompileMinutes": 28,
+    "perExactTestSeconds": 60,
+    "totalExactTestsMinutes": 8,
+    "outputPerProcessMiB": 8,
+    "diskFloorGiB": 2,
+    "processGroupRssGiB": 6,
+    "resourceNote": "Process-group sampled RSS is observation+abort, not hard aggregate limit. bounded process-group kill/reap on timeout; budget failures not source failures."
+  },
+  "provenance": {
+    "upstreamCommit": "300453be2ea33ca9785b9313fb0b109846a6079c",
+    "author": "Thefool <2804776511@qq.com>",
+    "license": "MIT Jason Young unchanged",
+    "commitPlan": [
+      "3610e7b3d718470e6afec4ff89a7757862a3a598: original four-file upstream fix/tests, Thefool author; validation pending",
+      "4494dd316ea31cdb3cc506ee802bb5d4377f17b4: additional tests only, Qing Liang verified identity; validation pending",
+      "Control kept separate from product; same-feature formatting fixup may squash only into corresponding commit."
+    ]
+  },
+  "reviewedSourceSHA": "4494dd316ea31cdb3cc506ee802bb5d4377f17b4",
+  "driver": "validate.py",
+  "offlineParserTests": "10 pass; synthetic logs only, not Rust product tests",
+  "independentReview": "review_cc_image_fallback final static review: no blocking issue; dirty control gate and failure receipts verified. Not Rust/fmt/RED-GREEN execution."
+}

@@ -1,0 +1,82 @@
+name: CC image fallback validation (disabled design)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_control_sha:
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cc-image-fallback-validation
+  cancel-in-progress: false
+jobs:
+  red-green:
+    # Intentionally impossible until source/control identities and driver are reviewed.
+    if: ${{ github.repository == 'xue-ding-e/CC-Switch-Next' && github.ref == 'refs/heads/validation/image-fallback-6194' && github.event_name == 'workflow_dispatch' && inputs.expected_control_sha == github.sha && false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      SOURCE_SHA: 4494dd316ea31cdb3cc506ee802bb5d4377f17b4
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - name: Checkout reviewed control
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Verify immutable control and reviewed source binding
+        env:
+          EXPECTED_CONTROL_SHA: ${{ inputs.expected_control_sha }}
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_CONTROL_SHA" = "$GITHUB_SHA"
+          test "$(git -C control rev-parse HEAD)" = "$EXPECTED_CONTROL_SHA"
+          test "$SOURCE_SHA" = 4494dd316ea31cdb3cc506ee802bb5d4377f17b4
+          python3 -c 'import json,os; p=json.load(open("control/plan.json")); assert p["reviewedSourceSHA"] == os.environ["SOURCE_SHA"]'
+      - name: Checkout immutable candidate
+        uses: actions/checkout@v4
+        with:
+          repository: xue-ding-e/CC-Switch-Next
+          ref: ${{ env.SOURCE_SHA }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout immutable RED baseline
+        uses: actions/checkout@v4
+        with:
+          repository: xue-ding-e/CC-Switch-Next
+          ref: 66c2f2351ac43e0d7bdb93f2ceafeac188e00329
+          path: source
+          persist-credentials: false
+      - name: Native backend environment from successful manual validation
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+          rustup toolchain install 1.95 --profile minimal --component rustfmt
+      - name: Exact tests-only RED then same-test GREEN
+        timeout-minutes: 66
+        env:
+          EXPECTED_CONTROL_SHA: ${{ inputs.expected_control_sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+          CANDIDATE_DIR: ${{ github.workspace }}/candidate
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 control/validate.py "$GITHUB_WORKSPACE/control" "$GITHUB_WORKSPACE/source" "$RUNNER_TEMP/image-fallback-evidence"
+      - name: Upload bounded evidence only
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-fallback-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/image-fallback-evidence/*.json
+            ${{ runner.temp }}/image-fallback-evidence/*.log
+            ${{ runner.temp }}/image-fallback-evidence/*.patch

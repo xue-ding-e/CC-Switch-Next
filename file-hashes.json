@@ -1,0 +1,22 @@
+{
+  "src-tauri/src/codex_config.rs": {
+    "base": "d97ebf3abd2ea8984da55a3ccc75be3eaeebf183a89eb6d9554c7d6e1ceb959e",
+    "red": "2a827013a7e6d72be1675bb4718647ad4d4148cb3593324630b0932853ac7339",
+    "green": "2a827013a7e6d72be1675bb4718647ad4d4148cb3593324630b0932853ac7339"
+  },
+  "src-tauri/src/model_capabilities.rs": {
+    "base": "c993329009cdffcdb1fce803c63f10be55965f72d2395f2486b47eb9fd9ee4d0",
+    "red": "0770274cbd0d4774553ef9a81adf62d035f0e0c02d3087046580bbfb19bb649d",
+    "green": "14cb6291dd47d076a44449281ec6b3a10c97c9b1a5a4aa44cf5f9debf3b8c6e0"
+  },
+  "src-tauri/src/proxy/forwarder.rs": {
+    "base": "c6922d6c83a8afcd713580b06b0a2b16ec36d402b65c51afc1b830b750b43c3a",
+    "red": "cea100cc644aea4ae84155e2788f95a58409ef95b9acfd1b40a07a08184e9d9d",
+    "green": "cea100cc644aea4ae84155e2788f95a58409ef95b9acfd1b40a07a08184e9d9d"
+  },
+  "src-tauri/src/proxy/media_sanitizer.rs": {
+    "base": "26242ee67dc8b595d6e5acbfaa564820df6bf39470e5cebd0574002214534430",
+    "red": "8ac952aa00d6eb54f7e6bdc0b12d04ba435a6770daf7f52ddfc1554b881b2ccb",
+    "green": "f42edbb2a5040dd649210b0d281d4983569de7bdce96b655860bafa75d22df29"
+  }
+}
