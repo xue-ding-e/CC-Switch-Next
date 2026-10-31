@@ -234,6 +234,7 @@ mod tests {
         // 识图的 V4.1 Flash。两者均已移出名单，必须 fail-open。
         assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-flash"));
         assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-pro"));
+        assert!(!is_confirmed_text_only_model("deepseek/deepseek-v4-pro-0813"));
         assert!(is_confirmed_text_only_model(
             "deepseek/deepseek-v4-flash-0731"
         ));
@@ -253,6 +254,9 @@ mod tests {
     fn unconfirmed_family_suffixes_fail_open() {
         for model in [
             "deepseek-v4-flash-vision",
+            "deepseek-v4-flash-0731-vision",
+            "deepseek-v4-flash-0731-vl",
+            "deepseek-v4-flash-0801",
             "minimax-m2.7-vision",
             "qwen3-coder-ultra",
             "qwen3-coder-vl",

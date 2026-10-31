@@ -6830,6 +6830,9 @@ mod tests {
         };
 
         assert!(fwd.media_retry_should_trigger("Codex", false, &body, &error));
+        assert!(!fwd.media_retry_should_trigger("Codex", true, &body, &error));
+        let text_body = json!({"model": "deepseek/deepseek-v4-flash-0731", "input": "hello"});
+        assert!(!fwd.media_retry_should_trigger("Codex", false, &text_body, &error));
     }
 
     #[test]
@@ -8408,6 +8411,81 @@ mod tests {
             let requests = up2.requests.lock().await;
             assert_eq!(requests.len(), 2);
             assert!(requests[1]
+                .to_string()
+                .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
+        }
+
+        #[tokio::test]
+        async fn openrouter_404_media_retry_on_second_provider_counts_a_switch() {
+            let up1 = upstream(vec![error(500, "boom")]).await;
+            let up2 = upstream(vec![
+                error(404, "No endpoints found that support image input"),
+                ok(),
+            ])
+            .await;
+            let fwd = forwarder(2, "p1");
+
+            let result = send(
+                &fwd,
+                vec![provider("p1", &up1), provider("p2", &up2)],
+                body_with_image("claude-sonnet-4-5"),
+            )
+            .await;
+
+            // A RED result must be the scripted image rejection, not a fixture/network failure.
+            if let Err(failure) = &result {
+                assert_eq!(up1.requests.lock().await.len(), 1);
+                assert_eq!(up2.requests.lock().await.len(), 1);
+                assert!(matches!(
+                    &failure.error,
+                    ProxyError::UpstreamError { status: 404, body: Some(body) }
+                        if body.contains("No endpoints found that support image input")
+                ));
+                eprintln!("CC6194_EXPECTED_RED: scripted image-input 404 after p1=1 p2=1");
+            }
+
+            assert_eq!(result.ok().map(|r| r.provider.id), Some("p2".into()));
+            assert_eq!(
+                books(&fwd).await,
+                Books {
+                    total: 1,
+                    success: 1,
+                    failed: 0,
+                    success_rate: 100.0,
+                    failover_count: 1,
+                    last_error: None,
+                    attempting: Some("p2".into()),
+                    in_use: Some("p2".into()),
+                }
+            );
+            assert_eq!(breaker(&fwd, "p1").await, Some((1, 1)));
+            assert_eq!(breaker(&fwd, "p2").await, Some((1, 0)));
+            let requests = up2.requests.lock().await;
+            assert_eq!(requests.len(), 2);
+            assert!(crate::proxy::media_sanitizer::contains_image_blocks(&requests[0]));
+            assert!(!crate::proxy::media_sanitizer::contains_image_blocks(&requests[1]));
+            assert!(requests[1]
+                .to_string()
+                .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
+        }
+
+        #[tokio::test]
+        async fn ordinary_endpoint_404_does_not_retry_or_strip_images() {
+            // A second scripted success must remain unused for an ordinary 404.
+            let up = upstream(vec![error(404, "Route not found"), ok()]).await;
+            let fwd = forwarder(1, "p1");
+            let result = send(
+                &fwd,
+                vec![provider("p1", &up)],
+                body_with_image("claude-sonnet-4-5"),
+            )
+            .await;
+
+            assert!(result.is_err());
+            let requests = up.requests.lock().await;
+            assert_eq!(requests.len(), 1);
+            assert!(crate::proxy::media_sanitizer::contains_image_blocks(&requests[0]));
+            assert!(!requests[0]
                 .to_string()
                 .contains(crate::proxy::media_sanitizer::UNSUPPORTED_IMAGE_MARKER));
         }

@@ -1217,6 +1217,8 @@ mod tests {
     fn ignores_unrelated_404_errors() {
         for message in [
             "Route not found",
+            "Invalid API key",
+            "No endpoints found",
             "No endpoints found that support image generation",
         ] {
             let error = ProxyError::UpstreamError {
@@ -1224,6 +1226,37 @@ mod tests {
                 body: Some(json!({ "error": { "message": message } }).to_string()),
             };
 
+            assert!(!is_unsupported_image_error(&error));
+        }
+    }
+
+    #[test]
+    fn openrouter_404_requires_image_phrase_and_a_body() {
+        for body in [
+            None,
+            Some(""),
+            Some("<html>404 Not Found</html>"),
+            Some("{}"),
+            Some("null"),
+        ] {
+            let error = ProxyError::UpstreamError {
+                status: 404,
+                body: body.map(str::to_string),
+            };
+            assert!(!is_unsupported_image_error(&error));
+        }
+        // Plain-text gateways use the same self-evident phrase as JSON errors.
+        let message = "No endpoints found that support image input";
+        let error = ProxyError::UpstreamError {
+            status: 404,
+            body: Some(message.to_string()),
+        };
+        assert!(is_unsupported_image_error(&error));
+        for status in [401, 403, 429, 500, 502] {
+            let error = ProxyError::UpstreamError {
+                status,
+                body: Some(message.to_string()),
+            };
             assert!(!is_unsupported_image_error(&error));
         }
     }
