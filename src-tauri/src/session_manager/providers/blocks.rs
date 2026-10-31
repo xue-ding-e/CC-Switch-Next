@@ -961,6 +961,46 @@ mod tests {
     }
 
     #[test]
+    fn title_read_saturates_large_ranges() {
+        for (start, limit, end) in [
+            (10, 31, 40),
+            (u64::MAX, 1, u64::MAX),
+            (u64::MAX, 2, u64::MAX),
+            (2, u64::MAX, u64::MAX),
+            (0, u64::MAX, u64::MAX - 1),
+        ] {
+            assert_eq!(
+                title_read("/synthetic/file.rs", Some(start), Some(limit)).1,
+                Some(format!(":{start}-{end}"))
+            );
+        }
+        assert_eq!(
+            title_read("/synthetic/file.rs", Some(u64::MAX), Some(0)).1,
+            None
+        );
+        assert_eq!(
+            title_read("/synthetic/file.rs", Some(u64::MAX), None).1,
+            Some(format!(":{}", u64::MAX))
+        );
+    }
+
+    #[test]
+    fn title_from_input_handles_large_numeric_and_string_read_ranges() {
+        for input in [
+            json!({"path": "/synthetic/file.rs", "offset": u64::MAX, "limit": 2}),
+            json!({"path": "/synthetic/file.rs", "start_line": u64::MAX.to_string(), "limit": "2"}),
+        ] {
+            assert_eq!(
+                title_from_input(ToolKind::Read, "read_file", None, &input),
+                (
+                    "/synthetic/file.rs".to_string(),
+                    Some(format!(":{}-{}", u64::MAX, u64::MAX))
+                )
+            );
+        }
+    }
+
+    #[test]
     fn titles_are_single_line_and_bounded() {
         assert_eq!(title_shell("cargo build"), "cargo build");
         assert_eq!(title_shell("cd a\ncargo test"), "cd a…");
