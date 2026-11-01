@@ -108,7 +108,7 @@ jobs:
           Copy-Item LICENSE next-package/LICENSE
           git diff --exit-code
           if ($LASTEXITCODE -ne 0) { throw 'Tracked source changed' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cc-switch-next-windows-${{ github.sha }}
           path: next-package/*
