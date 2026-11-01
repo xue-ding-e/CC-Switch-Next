@@ -65,7 +65,7 @@ jobs:
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
         if: ${{ !cancelled() }}
       - name: Install upstream-pinned cargo-nextest
-        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32
         with:
           tool: cargo-nextest
       - name: Recheck cache test in isolation
